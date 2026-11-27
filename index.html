@@ -10,8 +10,8 @@
 </head>
 
 <body class="on-dashboard">
-  <!-- Supabase Authentication Overlay -->
-  <div id="auth-overlay" class="auth-overlay" hidden>
+  <!-- Supabase Authentication Overlay (Visible by default until sign in) -->
+  <div id="auth-overlay" class="auth-overlay">
     <div class="auth-card">
       <div class="auth-head">
         <div class="auth-logo" id="auth-logo">IT</div>
@@ -59,7 +59,7 @@
     </div>
   </div>
 
-  <div class="app">
+  <div class="app" style="display:none;">
     <aside class="sidebar" id="sidebar">
       <div class="brand" data-act="nav" data-page="dashboard" title="Home / Dashboard" style="cursor:pointer">
         <span class="logo" id="brand-logo">IT</span>

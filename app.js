@@ -826,7 +826,7 @@ function initSupabase() {
 let currentUser = null; // { id: string, email: string, role: string }
 
 function getUserRole() {
-  if (!currentUser) return 'it_admin'; // local offline fallback
+  if (!currentUser) return 'employee'; // unauthenticated fallback
   const email = (currentUser.email || '').toLowerCase().trim();
   if (db.settings && db.settings.userRoleOverrides && db.settings.userRoleOverrides[email]) {
     return db.settings.userRoleOverrides[email];
@@ -908,11 +908,14 @@ function updateAuthUI() {
 
   if (!currentUser) {
     if (overlay) {
+      overlay.removeAttribute('hidden');
       overlay.hidden = false;
       overlay.classList.remove('hidden');
-      overlay.style.display = 'flex';
+      overlay.style.setProperty('display', 'flex', 'important');
     }
-    if (appEl) appEl.style.display = 'none';
+    if (appEl) {
+      appEl.style.setProperty('display', 'none', 'important');
+    }
     if (userCard) userCard.hidden = true;
     return;
   }
@@ -920,11 +923,14 @@ function updateAuthUI() {
   trackUserLogin(currentUser.email);
 
   if (overlay) {
+    overlay.setAttribute('hidden', '');
     overlay.hidden = true;
     overlay.classList.add('hidden');
-    overlay.style.display = 'none';
+    overlay.style.setProperty('display', 'none', 'important');
   }
-  if (appEl) appEl.style.display = 'flex';
+  if (appEl) {
+    appEl.style.setProperty('display', 'flex', 'important');
+  }
 
   if (userCard) {
     userCard.hidden = false;
@@ -2064,6 +2070,10 @@ const ui = {
 };
 const page = () => (location.hash.replace(/^#\/?/, '').split('?')[0] || 'dashboard');
 function render() {
+  if (!currentUser) {
+    updateAuthUI();
+    return;
+  }
   const curPage = page();
   if (!canAccessPage(curPage)) {
     const fallback = ALL_PAGES.find(p => canAccessPage(p)) || 'tickets';
