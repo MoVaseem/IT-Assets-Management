@@ -828,13 +828,24 @@ let currentUser = null; // { id: string, email: string, role: string }
 function getUserRole() {
   if (!currentUser) return 'employee'; // unauthenticated fallback
   const email = (currentUser.email || '').toLowerCase().trim();
+
+  // 1. PRIMARY SUPER ADMIN / ENGINEER: Mo Vaseem is ALWAYS it_admin! (Can NEVER be demoted)
+  const eng = (db.settings?.engineer || '').toLowerCase();
+  if (
+    email.includes('vaseem') || 
+    email === 'movaseem@tractorjunction.com' ||
+    (eng && (email === eng || eng.includes(email.split('@')[0])))
+  ) {
+    return 'it_admin';
+  }
+
+  // 2. Custom role overrides assigned by IT Admin for other users
   if (db.settings && db.settings.userRoleOverrides && db.settings.userRoleOverrides[email]) {
     return db.settings.userRoleOverrides[email];
   }
+
   if (currentUser.role) return currentUser.role;
   if (email.includes('hr')) return 'hr';
-  const eng = (db.settings?.engineer || '').toLowerCase();
-  if (eng && (email.includes('vaseem') || eng.includes(email.split('@')[0]))) return 'it_admin';
   const isIT = (db.settings?.itTeam || []).some(t => {
     const tLow = t.toLowerCase();
     const namePart = email.split('@')[0].replace(/[._-]/g, ' ');
@@ -1181,6 +1192,12 @@ async function checkAuthOnLoad() {
 }
 
 function showSetNewPasswordModal(userEmail = '') {
+  // If the user currently logged in is the primary IT Admin and this is not a recovery link in URL, do not show
+  const isRecoveryHash = window.location.hash.includes('type=recovery') || window.location.hash.includes('type=invite') || window.location.hash.includes('access_token=');
+  if (isITAdmin() && !isRecoveryHash) {
+    return;
+  }
+
   const body = `
     <div style="padding:4px 0;">
       <p class="hint" style="margin-top:0;">Welcome <b>${esc(userEmail || 'User')}</b>! Kripya apna naya password create karein taaki aap aage is password se direct login kar sakein:</p>
@@ -1195,48 +1212,65 @@ function showSetNewPasswordModal(userEmail = '') {
     </div>
   `;
 
-  modal('🔑 Create / Set Your Password', body, [
+  const root = modal('🔑 Create / Set Your Password', body, [
     {
       label: 'Save Password & Enter Portal',
       cls: 'primary',
-      onClick: async (root) => {
-        const p1 = root.querySelector('#new-auth-pass')?.value;
-        const p2 = root.querySelector('#confirm-auth-pass')?.value;
+      onClick: async (rootEl, closeFn) => {
+        const p1 = rootEl.querySelector('#new-auth-pass')?.value;
+        const p2 = rootEl.querySelector('#confirm-auth-pass')?.value;
         if (!p1 || p1.length < 6) {
-          root.err(['Password kam se kam 6 characters ka hona chahiye']);
+          rootEl.err(['Password kam se kam 6 characters ka hona chahiye']);
           return false;
         }
         if (p1 !== p2) {
-          root.err(['Passwords match nahi kar rahe hain']);
+          rootEl.err(['Passwords match nahi kar rahe hain']);
           return false;
         }
+
+        const submitBtn = rootEl.querySelector('footer .btn.primary');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving...'; }
 
         try {
           if (!sbClient) initSupabase();
           const { data, error } = await sbClient.auth.updateUser({ password: p1 });
           if (error) {
-            root.err([error.message]);
+            rootEl.err([error.message || 'Password update failed']);
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save Password & Enter Portal'; }
             return false;
           }
           toast('✅ Password set successfully! Welcome to TractorJunction Portal.', 'ok');
           if (window.location.hash.includes('access_token') || window.location.hash.includes('type=')) {
-            history.replaceState(null, '', window.location.pathname);
+            history.replaceState(null, '', window.location.pathname + '#/' + (page() || 'dashboard'));
           }
           if (data && data.user) {
-            const email = data.user.email;
-            const role = data.user.user_metadata?.role || (db.settings.userRoleOverrides && db.settings.userRoleOverrides[email]) || (email.toLowerCase().includes('hr') ? 'hr' : 'it_admin');
-            currentUser = { id: data.user.id, email, role };
+            const email = (data.user.email || '').toLowerCase().trim();
+            const role = (db.settings.userRoleOverrides && db.settings.userRoleOverrides[email]) || data.user.user_metadata?.role || '';
+            currentUser = { id: data.user.id, email: data.user.email, role };
             updateAuthUI();
             render();
           }
+          if (typeof closeFn === 'function') closeFn();
+          rootEl.remove();
           return true;
         } catch (err) {
-          root.err([err.message || 'Password update failed']);
+          rootEl.err([err.message || 'Password update failed']);
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save Password & Enter Portal'; }
           return false;
         }
       }
     }
   ], 'sm');
+
+  // If user clicks Cancel or Close, clean up the recovery hash from URL
+  const closeBtn = root.querySelector('[data-x]');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      if (window.location.hash.includes('type=recovery') || window.location.hash.includes('type=invite')) {
+        history.replaceState(null, '', window.location.pathname + '#/' + (page() || 'dashboard'));
+      }
+    });
+  }
 }
 
 function getRoleAccessSummaryHTML(role) {
@@ -1422,6 +1456,12 @@ function openInviteUserModal(preset = {}) {
           return false;
         }
 
+        // Prevent IT Admin from accidentally downgrading themselves
+        if (email.includes('vaseem') || email === 'movaseem@tractorjunction.com') {
+          root.err(['⚠️ Aap apna IT Admin account Employee me convert nahi kar sakte. Agar employee view test karna hai, to kisi test user email (jaise test.employee@tractorjunction.com) ko invite karein.']);
+          return false;
+        }
+
         // Save role override & known user in database
         if (!db.settings.userRoleOverrides) db.settings.userRoleOverrides = {};
         db.settings.userRoleOverrides[email] = role;
@@ -1480,6 +1520,27 @@ function openInviteUserModal(preset = {}) {
   }, 100);
 }
 
+function getIsolatedAuthClient() {
+  if (!window.supabase) return null;
+  const cfg = db.settings?.supabase || DEFAULT_SETTINGS.supabase;
+  const url = cfg.url || DEFAULT_SETTINGS.supabase.url;
+  const key = cfg.anonKey || DEFAULT_SETTINGS.supabase.anonKey;
+  if (!url || !key) return null;
+  try {
+    return window.supabase.createClient(url, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: 'sb_isolated_invite_session'
+      }
+    });
+  } catch (e) {
+    console.warn('Isolated client error:', e);
+    return null;
+  }
+}
+
 async function showUserInviteModal(email, role, phone = '', name = '', tempPass = '') {
   const roleMeta = DEFAULT_ROLE_PERMS[role] || { name: role, icon: '👤', badgeCls: 'role-hr' };
   const origin = window.location.origin + window.location.pathname;
@@ -1496,20 +1557,23 @@ async function showUserInviteModal(email, role, phone = '', name = '', tempPass 
   let emailStatus = '⏳ Sending password setup email via Supabase...';
   let emailOk = false;
 
-  if (sbClient) {
+  const isolatedClient = getIsolatedAuthClient();
+  if (isolatedClient) {
+    // 1. Create user in Supabase Auth using ISOLATED client (never touches Admin session!)
     try {
-      await sbClient.auth.signUp({
+      await isolatedClient.auth.signUp({
         email,
         password,
         options: { data: { role } }
       });
     } catch (_) {}
 
+    // 2. Dispatch password setup & recovery email
     try {
-      const { error } = await sbClient.auth.resetPasswordForEmail(email, { redirectTo: origin });
+      const { error } = await isolatedClient.auth.resetPasswordForEmail(email, { redirectTo: origin });
       if (error) {
         if (error.message.includes('rate limit')) {
-          emailStatus = '⚠️ Supabase email rate limit exceeded (Email will arrive shortly, or send directly via WhatsApp below).';
+          emailStatus = '⚠️ Supabase email rate limit reached (Email will arrive shortly, or send directly via WhatsApp below).';
         } else {
           emailStatus = `⚠️ Email notice: ${error.message}`;
         }
@@ -1633,7 +1697,9 @@ Kripya upar diye gaye link par jakar sign in karein aur apna password update kar
         try {
           resendBtn.disabled = true;
           resendBtn.textContent = 'Sending...';
-          const { error } = await sbClient.auth.resetPasswordForEmail(email, { redirectTo: origin });
+          const iso = getIsolatedAuthClient();
+          const client = iso || sbClient;
+          const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: origin });
           if (error) throw error;
           toast('✅ Invite / Password reset email re-sent!', 'ok');
         } catch (e) {
@@ -2249,6 +2315,11 @@ function migrate(d) {
   }
   if (!out.settings.userRoleOverrides || typeof out.settings.userRoleOverrides !== 'object') {
     out.settings.userRoleOverrides = {};
+  } else {
+    // Mo Vaseem must never be overridden
+    Object.keys(out.settings.userRoleOverrides).forEach(k => {
+      if (k.toLowerCase().includes('vaseem')) delete out.settings.userRoleOverrides[k];
+    });
   }
   if (!Array.isArray(out.settings.knownUsers)) {
     out.settings.knownUsers = [];
@@ -6851,6 +6922,26 @@ async function init() {
 
   try { const d = await IDB.get('db'); if (d) db = migrate(d); }
   catch (e) { toast('Browser storage not available: ' + e.message, 'err'); }
+
+  // Ensure Mo Vaseem is ALWAYS restored as IT Admin in memory and in settings
+  if (db.settings?.userRoleOverrides) {
+    let cleaned = false;
+    Object.keys(db.settings.userRoleOverrides).forEach(k => {
+      if (k.toLowerCase().includes('vaseem')) {
+        delete db.settings.userRoleOverrides[k];
+        cleaned = true;
+      }
+    });
+    if (cleaned) {
+      dirtyQueue.settings = true;
+      save();
+    }
+  }
+
+  if (currentUser && (currentUser.email.toLowerCase().includes('vaseem') || currentUser.email === 'movaseem@tractorjunction.com')) {
+    currentUser.role = 'it_admin';
+  }
+  updateAuthUI();
 
   // Fallback to bundled JSON if IDB is empty on first load
   if (!db.employees.length && !db.assets.length) {
