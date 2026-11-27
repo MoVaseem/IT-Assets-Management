@@ -1418,13 +1418,10 @@ async function showUserInviteModal(email, role, phone = '', name = '', tempPass 
   const roleMeta = DEFAULT_ROLE_PERMS[role] || { name: role, icon: '👤', badgeCls: 'role-hr' };
   const origin = window.location.origin + window.location.pathname;
   const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-  const wifiIP = '10.55.2.160';
   const ghPagesOrigin = 'https://movaseem.github.io/IT-Assets-Management/';
-  const wifiOrigin = isLocal ? window.location.href.replace(/127\.0\.0\.1|localhost/, wifiIP).split('#')[0] : origin;
   
-  // For WhatsApp, Mobile devices & Email redirectTo:
-  // If local, prefer Wi-Fi IP so other devices on same network can reach it
-  const effectiveOrigin = isLocal ? wifiOrigin : origin;
+  // ALWAYS use live GitHub Pages URL for invitations so links work seamlessly on all phones, PCs & networks
+  const effectiveOrigin = ghPagesOrigin;
 
   const password = tempPass || ('TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2));
   const userName = name || email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -1555,11 +1552,9 @@ Kripya upar diye gaye link par jakar sign in karein aur apna password update kar
         </div>
       </div>
 
-      ${isLocal ? `
-      <div style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);padding:10px 12px;border-radius:8px;font-size:12px;color:#fde047;margin-bottom:12px;">
-        📱 <b>Mobile / Dusre PC ke liye Tip:</b><br>
-        <code>127.0.0.1</code> sirf aapke is laptop par kaam karega. Mobile phone par open karne ke liye link me Wi-Fi IP (<code>${wifiIP}</code>) laga diya gaya hai.
-      </div>` : ''}
+      <div style="background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.3);padding:10px 12px;border-radius:8px;font-size:12px;color:#93c5fd;margin-bottom:12px;">
+        🌐 <b>Live Portal Link:</b> Invite link me live URL (<code>${ghPagesOrigin}</code>) set hai, taaki user apne mobile phone ya kisi bhi device par direct open kar sake.
+      </div>
 
       <div style="position:relative;margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
