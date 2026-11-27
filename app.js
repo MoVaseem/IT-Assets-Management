@@ -5451,55 +5451,83 @@ PAGES.settings = () => {
     </summary>
     <div class="settings-accordion-body">
       <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; margin-bottom: 8px;">
-        <!-- Card A: User Role Assignment -->
-        <div class="card" style="display:flex;flex-direction:column;margin-bottom:0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+        <!-- Card A: User Role Assignment (Expanded Full-Width) -->
+        <div class="card" style="grid-column: 1 / -1; display: flex; flex-direction: column; margin-bottom: 16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:12px;">
             <div>
-              <h4 style="margin:0;font-size:14px;">👥 Assigned User Roles</h4>
-              <p class="hint" style="margin:2px 0 0;font-size:12px;">Authorized users jinhe IT Admin ne invite kiya hai (Invite-Only System):</p>
+              <h4 style="margin:0;font-size:15px;display:flex;align-items:center;gap:8px;">
+                <span>👥 Assigned User Roles &amp; Access Management</span>
+              </h4>
+              <p class="hint" style="margin:3px 0 0;font-size:12.5px;">Authorized company users jinhe portal access diya gaya hai (Invite-Only System):</p>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span class="badge b-acc" style="font-size:11px;">${allKnownEmails.length} Authorized</span>
-              <button class="btn primary sm" data-act="open-invite-user-modal">✉️ + Invite New User (Email + WhatsApp)</button>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="badge b-acc" style="font-size:12px;padding:4px 10px;font-weight:600;">${allKnownEmails.length} Authorized User(s)</span>
+              <button class="btn primary" data-act="open-invite-user-modal" style="font-weight:600;padding:6px 14px;font-size:13px;display:inline-flex;align-items:center;gap:6px;">
+                ✉️ + Invite New User (Email + WhatsApp)
+              </button>
             </div>
           </div>
           
-          <div class="inline" style="gap:8px;margin-bottom:12px;background:var(--panel2);padding:10px;border-radius:6px;border:1px solid var(--line);">
-            <input id="assign-role-email" placeholder="user@tractorjunction.com" style="flex:1.2;font-size:12px;">
-            <select id="assign-role-select" style="flex:1;font-size:12px;">
-              <option value="employee">👤 Employee (Helpdesk Only)</option>
-              <option value="hr">👤 HR Team</option>
-              <option value="it_admin">👑 IT Admin</option>
-              <option value="viewer">👁️ Read-Only Viewer</option>
-              <option value="finance">💼 Finance / Auditor</option>
-            </select>
-            <button class="btn primary sm" data-act="save-user-role-btn">+ Assign &amp; Invite</button>
+          <div class="inline" style="gap:10px;margin-bottom:14px;background:var(--panel2);padding:12px 14px;border-radius:8px;border:1px solid var(--line);align-items:center;flex-wrap:wrap;">
+            <div style="flex:2;min-width:280px;">
+              <input id="assign-role-email" placeholder="Enter work email (e.g. user@tractorjunction.com)" style="width:100%;font-size:13px;padding:8px 12px;">
+            </div>
+            <div style="flex:1.2;min-width:200px;">
+              <select id="assign-role-select" style="width:100%;font-size:13px;padding:8px 10px;font-weight:600;">
+                <option value="employee">👤 Employee (Helpdesk Only)</option>
+                <option value="hr">👤 HR Team</option>
+                <option value="it_admin">👑 IT Admin</option>
+                <option value="viewer">👁️ Read-Only Viewer</option>
+                <option value="finance">💼 Finance / Auditor</option>
+              </select>
+            </div>
+            <button class="btn primary" data-act="save-user-role-btn" style="padding:8px 16px;font-size:13px;font-weight:600;">+ Assign &amp; Invite</button>
           </div>
 
-          <div style="flex:1;display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;padding-right:2px;">
+          <div style="display:flex;flex-direction:column;gap:8px;max-height:480px;overflow-y:auto;padding-right:4px;">
             ${allKnownEmails.length ? allKnownEmails.map(em => {
               const r = userOverrides[em] || (em.includes('hr') ? 'hr' : 'it_admin');
               const rMeta = DEFAULT_ROLE_PERMS[r] || { name: r, icon: '👤', badgeCls: 'role-hr' };
               const isMe = currentUser && currentUser.email && low(currentUser.email) === low(em);
-              return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--panel2);border-radius:6px;border:1px solid var(--line);font-size:12px;">
-                <div style="display:flex;align-items:center;gap:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                  <span class="user-role-badge ${rMeta.badgeCls}">${rMeta.icon} ${esc(rMeta.name)}</span>
-                  <span style="font-weight:600;color:var(--text);">${esc(em)}</span>
-                  ${isMe ? '<span class="badge b-ok" style="font-size:10px;">You</span>' : ''}
+              const emp = (db.employees || []).find(e => (e.email || '').toLowerCase() === low(em));
+              
+              return `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--panel2);border-radius:8px;border:1px solid var(--line);font-size:13px;gap:12px;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:12px;flex:1.5;min-width:280px;">
+                  <span class="user-role-badge ${rMeta.badgeCls}" style="font-size:11px;padding:4px 10px;white-space:nowrap;letter-spacing:0.04em;">${rMeta.icon} ${esc(rMeta.name)}</span>
+                  <div style="display:flex;flex-direction:column;gap:2px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span style="font-weight:700;color:var(--text);font-size:13px;">${esc(em)}</span>
+                      ${isMe ? '<span class="badge b-ok" style="font-size:10px;font-weight:700;">You (Super Admin)</span>' : ''}
+                    </div>
+                    ${emp ? `<span style="font-size:11.5px;color:var(--muted);">${esc(emp.name)}${emp.department ? ' · ' + esc(emp.department) : ''}${emp.contact || emp.phone ? ' · 📱 ' + esc(emp.contact || emp.phone) : ''}</span>` : ''}
+                  </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;">
-                  <select class="user-role-quick-change" data-email="${esc(em)}" style="font-size:11px;padding:2px 6px;">
-                    <option value="employee" ${r === 'employee' ? 'selected' : ''}>👤 Employee</option>
-                    <option value="hr" ${r === 'hr' ? 'selected' : ''}>👤 HR</option>
-                    <option value="it_admin" ${r === 'it_admin' ? 'selected' : ''}>👑 IT Admin</option>
-                    <option value="viewer" ${r === 'viewer' ? 'selected' : ''}>👁️ Viewer</option>
-                    <option value="finance" ${r === 'finance' ? 'selected' : ''}>💼 Finance</option>
-                  </select>
-                  <button class="btn sm" data-act="send-invite-user" data-email="${esc(em)}" title="Send or Copy Invite / Password Setup Link" style="padding:2px 7px;font-size:11px;">✉️ Invite</button>
-                  ${userOverrides[em] ? `<button class="btn sm danger" data-act="del-user-role" data-email="${esc(em)}" title="Remove custom role override" style="padding:2px 7px;font-size:11px;">✕</button>` : ''}
+
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="font-size:11.5px;color:var(--muted);font-weight:600;">Role:</span>
+                    <select class="user-role-quick-change" data-email="${esc(em)}" style="font-size:12px;padding:4px 10px;font-weight:600;min-width:140px;">
+                      <option value="employee" ${r === 'employee' ? 'selected' : ''}>👤 Employee</option>
+                      <option value="hr" ${r === 'hr' ? 'selected' : ''}>👤 HR Team</option>
+                      <option value="it_admin" ${r === 'it_admin' ? 'selected' : ''}>👑 IT Admin</option>
+                      <option value="viewer" ${r === 'viewer' ? 'selected' : ''}>👁️ Viewer</option>
+                      <option value="finance" ${r === 'finance' ? 'selected' : ''}>💼 Finance</option>
+                    </select>
+                  </div>
+                  
+                  <button class="btn sm" data-act="send-invite-user" data-email="${esc(em)}" title="Send WhatsApp &amp; Email Invite with login link" style="padding:4px 12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">
+                    ✉️ Invite / Share
+                  </button>
+
+                  ${userOverrides[em] && !isMe ? `
+                    <button class="btn sm danger" data-act="del-user-role" data-email="${esc(em)}" title="Remove custom role override" style="padding:4px 10px;font-size:12px;">
+                      ✕ Remove
+                    </button>
+                  ` : ''}
                 </div>
               </div>`;
-            }).join('') : '<span class="muted" style="font-size:12px">No registered users yet. Type an email above to pre-assign a role.</span>'}
+            }).join('') : '<span class="muted" style="font-size:13px;padding:16px;text-align:center;">No registered users yet. Type an email above to pre-assign a role.</span>'}
           </div>
         </div>
 
