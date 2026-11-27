@@ -844,6 +844,22 @@ function getUserRole() {
   return 'employee';
 }
 
+function isUserAuthorized(email) {
+  if (!email) return false;
+  const e = email.toLowerCase().trim();
+  const eng = (db.settings?.engineer || '').toLowerCase();
+  if (eng && (e.includes('vaseem') || eng.includes(e.split('@')[0]))) return true;
+  if (e.includes('vaseem') || e === 'movaseem@tractorjunction.com') return true;
+  if (db.settings?.userRoleOverrides && db.settings.userRoleOverrides[e]) return true;
+  if (Array.isArray(db.settings?.knownUsers) && db.settings.knownUsers.some(u => (u || '').toLowerCase().trim() === e)) return true;
+  if (Array.isArray(db.settings?.itTeam) && db.settings.itTeam.some(t => {
+    const tLow = t.toLowerCase();
+    return tLow.includes(e) || e.includes(tLow.replace(/[^a-z0-9]/g, ''));
+  })) return true;
+  if (Array.isArray(db.employees) && db.employees.some(emp => (emp.email || '').toLowerCase().trim() === e)) return true;
+  return false;
+}
+
 function getUserRoleName(r) {
   const role = r || getUserRole();
   const def = DEFAULT_ROLE_PERMS[role];
@@ -996,28 +1012,9 @@ function applyRoleNavRestrictions() {
 
 function setupAuthListeners() {
   const form = $('#auth-form');
-  const tabLogin = $('#tab-login');
-  const tabSignup = $('#tab-signup');
-  const roleBox = $('#role-select-box');
   const submitBtn = $('#auth-submit-btn');
   const errBox = $('#auth-error');
   const succBox = $('#auth-success');
-  let authMode = 'login';
-
-  const switchTab = (mode) => {
-    authMode = mode;
-    tabLogin?.classList.toggle('on', mode === 'login');
-    tabSignup?.classList.toggle('on', mode === 'signup');
-    if (roleBox) roleBox.style.display = mode === 'signup' ? 'block' : 'none';
-    const forgotBox = $('#forgot-pass-box');
-    if (forgotBox) forgotBox.style.display = mode === 'login' ? 'flex' : 'none';
-    if (submitBtn) submitBtn.textContent = mode === 'login' ? 'Sign In' : 'Create Account';
-    if (errBox) errBox.style.display = 'none';
-    if (succBox) succBox.style.display = 'none';
-  };
-
-  if (tabLogin) tabLogin.onclick = () => switchTab('login');
-  if (tabSignup) tabSignup.onclick = () => switchTab('signup');
 
   const forgotBtn = $('#btn-forgot-password');
   if (forgotBtn) {
@@ -1063,54 +1060,52 @@ function setupAuthListeners() {
 
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Please wait…';
+        submitBtn.textContent = 'Verifying access…';
       }
 
       try {
         if (!sbClient) initSupabase();
         if (!sbClient) throw new Error('Supabase is not connected. Check network connection.');
 
-        if (authMode === 'login') {
-          const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
-          if (error) throw error;
-          const role = data.user.user_metadata?.role || (db.settings.userRoleOverrides && db.settings.userRoleOverrides[email.toLowerCase()]) || '';
-          currentUser = { id: data.user.id, email: data.user.email, role };
-          const finalRole = getUserRole();
-          updateAuthUI();
-          toast(`Logged in as ${getUserRoleName(finalRole)}`, 'ok');
-          render();
-          syncFromSupabase().then(() => render()).catch(console.warn);
-        } else {
-          const role = $('#auth-role')?.value || 'employee';
-          const { data, error } = await sbClient.auth.signUp({
-            email,
-            password,
-            options: { data: { role } }
-          });
-          if (error) throw error;
+        const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
 
-          if (data.session) {
-            currentUser = { id: data.user.id, email: data.user.email, role };
-            updateAuthUI();
-            toast(`Account created & signed in!`, 'ok');
-            render();
-            syncFromSupabase().then(() => render()).catch(console.warn);
-          } else {
-            if (succBox) {
-              succBox.textContent = 'Account ban gaya hai! Ab aap Sign In tab me jakar login karein.';
-              succBox.style.display = 'block';
-            }
-            switchTab('login');
+        const userEmail = (data.user?.email || email).toLowerCase().trim();
+
+        // STRICT SECURITY GATE: Only users authorized / invited by IT Admin can sign in
+        if (!isUserAuthorized(userEmail)) {
+          console.warn('Unauthorized login attempt:', userEmail);
+          try { await sbClient.auth.signOut(); } catch (_) {}
+          currentUser = null;
+          updateAuthUI();
+          if (errBox) {
+            errBox.innerHTML = `
+              <div style="text-align:left;line-height:1.5;">
+                <b style="color:var(--err);font-size:13px;">🚫 Access Denied: Account Not Invited</b><br>
+                Aapka work email (<code>${esc(userEmail)}</code>) IT Asset Management Portal ke liye authorized nahi hai.<br>
+                Is system me sirf wahi users login kar sakte hain jinhe IT Admin ne portal se invite link bheja hai.<br>
+                <div style="margin-top:6px;font-size:11.5px;color:var(--muted);">Kripya access lene ke liye apne IT Administrator se contact karein.</div>
+              </div>`;
+            errBox.style.display = 'block';
           }
+          return;
         }
+
+        const role = (db.settings.userRoleOverrides && db.settings.userRoleOverrides[userEmail]) || data.user.user_metadata?.role || '';
+        currentUser = { id: data.user.id, email: data.user.email, role };
+        const finalRole = getUserRole();
+        updateAuthUI();
+        toast(`Logged in as ${getUserRoleName(finalRole)}`, 'ok');
+        render();
+        syncFromSupabase().then(() => render()).catch(console.warn);
       } catch (err) {
         console.error('Auth error:', err);
         if (errBox) {
           let msg = err.message || 'Authentication failed.';
           if (msg.includes('Email not confirmed')) {
-            msg = 'Email confirm nahi hua hai. Supabase Dashboard ➔ Users me jakar is email ko "Confirm User" karein ya Confirm email setting OFF karke naya account banayein.';
+            msg = 'Email confirm nahi hua hai. Supabase Dashboard ➔ Users me jakar is email ko "Confirm User" karein ya Confirm email setting OFF karein.';
           } else if (msg.includes('Invalid login credentials')) {
-            msg = 'Email ya Password galat hai. Kripya check karke dobara try karein.';
+            msg = 'Email ya Password galat hai. Kripya check karke dobara try karein, ya IT Admin se invite link lein.';
           }
           errBox.textContent = msg;
           errBox.style.display = 'block';
@@ -1118,7 +1113,7 @@ function setupAuthListeners() {
       } finally {
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.textContent = authMode === 'login' ? 'Sign In' : 'Create Account';
+          submitBtn.textContent = 'Sign In';
         }
       }
     };
@@ -1133,7 +1128,14 @@ function setupAuthListeners() {
         } else if (event === 'PASSWORD_RECOVERY') {
           showSetNewPasswordModal(session?.user?.email);
         } else if (event === 'SIGNED_IN' && session && session.user) {
-          const role = session.user.user_metadata?.role || (db.settings.userRoleOverrides && db.settings.userRoleOverrides[session.user.email]) || '';
+          const userEmail = (session.user.email || '').toLowerCase().trim();
+          if (!isUserAuthorized(userEmail)) {
+            try { await sbClient.auth.signOut(); } catch (_) {}
+            currentUser = null;
+            updateAuthUI();
+            return;
+          }
+          const role = session.user.user_metadata?.role || (db.settings.userRoleOverrides && db.settings.userRoleOverrides[userEmail]) || '';
           currentUser = { id: session.user.id, email: session.user.email, role };
           updateAuthUI();
         }
@@ -1154,7 +1156,15 @@ async function checkAuthOnLoad() {
   try {
     const { data: { session } } = await sbClient.auth.getSession();
     if (session && session.user) {
-      const email = session.user.email;
+      const email = (session.user.email || '').toLowerCase().trim();
+      // Guard against unauthorized session
+      if (!isUserAuthorized(email)) {
+        console.warn('Unauthorized session detected on load, signing out:', email);
+        try { await sbClient.auth.signOut(); } catch (_) {}
+        currentUser = null;
+        updateAuthUI();
+        return;
+      }
       const role = session.user.user_metadata?.role || (db.settings.userRoleOverrides && db.settings.userRoleOverrides[email]) || '';
       currentUser = { id: session.user.id, email, role };
       if (isRecovery) {
@@ -1229,7 +1239,248 @@ function showSetNewPasswordModal(userEmail = '') {
   ], 'sm');
 }
 
-async function showUserInviteModal(email, role) {
+function getRoleAccessSummaryHTML(role) {
+  const roleMeta = DEFAULT_ROLE_PERMS[role] || { name: role, icon: '👤', badgeCls: 'role-hr' };
+  let allowed = [];
+  let blocked = [];
+  let rights = [];
+
+  if (role === 'employee') {
+    allowed = ['🎫 IT Helpdesk & Tickets (Self-Service Only)'];
+    blocked = [
+      '💻 Assets (Hardware & Devices)',
+      '👥 Employees (Company Directory)',
+      '🧩 Software & License Inventory',
+      '🛠️ Maintenance & Repairs',
+      '🕘 History & Audit Trail',
+      '⚠️ Data Issues',
+      '📥 Import / Export & DB',
+      '⚙️ Settings & Administration',
+      '✉️ Work Email Requests'
+    ];
+    rights = [
+      '✅ Apni IT problem/complaint ke liye ticket raise kar sakte hain (Laptop, Wi-Fi, Software, Access)',
+      '✅ Real-time SLA countdown timer aur assigned IT engineer live dekh sakte hain',
+      '✅ Ticket comments me updates/replies likh sakte hain',
+      '🚫 Confidential company assets, laptops ya doosre employees ka data nahi dekh sakte (All Hidden)',
+      '🚫 System records me koi change ya deletion karne ka adhikaar nahi hai'
+    ];
+  } else if (role === 'hr') {
+    allowed = ['👥 Employees Directory', '✉️ Work Email Requests', '🎫 Helpdesk & Tickets', '📊 Dashboard'];
+    blocked = ['💻 Hardware Assets', '🧩 Software Licenses', '🛠️ Maintenance', '📥 Import / Export', '⚙️ Settings'];
+    rights = [
+      '✅ Naye employees ka record create aur edit kar sakte hain',
+      '✅ New Joinee work email creation task generate kar sakte hain',
+      '✅ Offboarding exit clearance process initiate kar sakte hain',
+      '🚫 Asset purchase price, procurement cost aur IT configs hidden rahengi'
+    ];
+  } else if (role === 'it_admin') {
+    allowed = ['👑 All 11 Modules (Complete IT Administrative Access)'];
+    blocked = ['None (Unrestricted Super Admin)'];
+    rights = [
+      '✅ Assets, Softwares, Employees, Maintenance, Tickets sabhi par full read/write rights',
+      '✅ Naye users ko invite karna aur unke roles / module permissions assign karna',
+      '✅ Cloud Supabase sync, backup export aur restore karna',
+      '✅ IT tickets assign karna, solve karna aur SLA policies manage karna'
+    ];
+  } else if (role === 'viewer') {
+    allowed = ['📊 Dashboard', '💻 Assets', '👥 Employees', '🎫 Helpdesk', '🕘 History'];
+    blocked = ['⚙️ Settings', '📥 Import / Export', '🛠️ Maintenance'];
+    rights = [
+      '✅ Company assets aur employee records search aur view kar sakte hain',
+      '🚫 Read-only access: Kisi bhi record ko add, edit ya delete nahi kar sakte'
+    ];
+  } else if (role === 'finance') {
+    allowed = ['📊 Dashboard', '💻 Assets (Valuation)', '🧩 Software (Licenses)', '🕘 History'];
+    blocked = ['⚙️ Settings', '🛠️ Maintenance', '✉️ Email Requests', '👥 Employees'];
+    rights = [
+      '✅ Asset purchase cost, depreciation rate aur current book value audit kar sakte hain',
+      '✅ Software license consumption aur renewals verify kar sakte hain',
+      '🚫 Hardware specifications ya asset assignments change nahi kar sakte'
+    ];
+  }
+
+  return `
+    <div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">
+          <span>🛡️ Permitted Access for:</span>
+          <span class="user-role-badge ${roleMeta.badgeCls}">${roleMeta.icon} ${esc(roleMeta.name)}</span>
+        </span>
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--ok, #22c55e);margin-bottom:4px;">🟢 Allowed Modules / Windows (User inko dekh payega):</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+          ${allowed.map(m => `<span style="font-size:11px;background:rgba(34,197,94,0.12);color:var(--ok, #22c55e);border:1px solid rgba(34,197,94,0.3);padding:2px 8px;border-radius:4px;font-weight:600;">${esc(m)}</span>`).join('')}
+        </div>
+      </div>
+
+      ${blocked.length && blocked[0] !== 'None (Unrestricted Super Admin)' ? `
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--err, #ef4444);margin-bottom:4px;">🔴 Restricted / Blocked Windows (User se bilkul HIDDEN rahenge):</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+          ${blocked.map(m => `<span style="font-size:11px;background:rgba(239,68,68,0.1);color:var(--err, #ef4444);border:1px solid rgba(239,68,68,0.25);padding:2px 8px;border-radius:4px;">${esc(m)}</span>`).join('')}
+        </div>
+      </div>` : ''}
+
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">📋 Operational Rights &amp; Security Capabilities:</div>
+        <ul style="margin:0;padding-left:18px;font-size:11.5px;color:var(--text);line-height:1.5;">
+          ${rights.map(r => `<li>${esc(r)}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+function openInviteUserModal(preset = {}) {
+  const emps = Array.isArray(db.employees) ? db.employees : [];
+  const datalistOptions = emps.slice(0, 300).map(e => 
+    `<option value="${esc(e.email || '')}" data-name="${esc(e.name || '')}" data-phone="${esc(e.contact || e.phone || '')}">${esc(e.emp_id ? e.emp_id + ' - ' : '')}${esc(e.name || '')} (${esc(e.dept || e.department || '')})</option>`
+  ).join('');
+
+  const initialRole = preset.role || 'employee';
+  const initialEmail = preset.email || '';
+  const initialName = preset.name || '';
+  const initialPhone = preset.phone || '';
+  const tempPass = 'TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2);
+
+  const body = `
+    <div style="padding:4px 0;">
+      <p class="hint" style="margin-top:0;font-size:12px;">
+        Naye user ko portal access dene ke liye unki details aur role set karein. Invite link <b>Work Email aur WhatsApp dono par</b> bheja jayega:
+      </p>
+
+      <form id="invite-user-form" class="form-grid" style="gap:12px;margin-top:8px;">
+        <div class="full" style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;">
+          <label style="font-size:11.5px;font-weight:600;display:block;margin-bottom:4px;color:var(--muted);">
+            ⚡ Quick Auto-Fill from Employee Master (Optional):
+          </label>
+          <input type="text" id="inv-emp-picker" list="dl_invite_emps" placeholder="Type employee name or email to auto-fill..." style="width:100%;font-size:12px;">
+          <datalist id="dl_invite_emps">${datalistOptions}</datalist>
+          <span style="font-size:11px;color:var(--muted);margin-top:3px;display:block;">Select karne par Name, Email aur Mobile number automatically fill ho jayenge.</span>
+        </div>
+
+        <label><b>Employee / User Name</b>
+          <input type="text" id="inv-name" placeholder="e.g. Rahul Sharma" value="${esc(initialName)}">
+        </label>
+
+        <label><b>Work Email Address *</b>
+          <input type="email" id="inv-email" placeholder="name@tractorjunction.com" required value="${esc(initialEmail)}">
+        </label>
+
+        <label><b>Mobile / WhatsApp Number (for WhatsApp invite)</b>
+          <input type="tel" id="inv-phone" placeholder="e.g. 9876543210" value="${esc(initialPhone)}">
+          <span class="hint" style="font-size:11px;margin-top:2px;">10-digit mobile number for direct WhatsApp invite link</span>
+        </label>
+
+        <label><b>Temporary Password (Auto-Generated)</b>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="inv-temp-pass" value="${esc(tempPass)}" style="font-family:monospace;font-weight:700;letter-spacing:1px;" readonly>
+            <button type="button" class="btn sm" id="btn-regen-pass" title="Generate another password">🎲</button>
+          </div>
+        </label>
+
+        <div class="full">
+          <label><b>Assign Portal Role *</b>
+            <select id="inv-role" style="font-weight:600;font-size:13px;padding:6px 10px;">
+              <option value="employee" ${initialRole === 'employee' ? 'selected' : ''}>👤 Employee (Self-Service IT Helpdesk &amp; Tickets Only)</option>
+              <option value="hr" ${initialRole === 'hr' ? 'selected' : ''}>👤 HR Team (Employee Directory &amp; Onboarding)</option>
+              <option value="it_admin" ${initialRole === 'it_admin' ? 'selected' : ''}>👑 IT Admin (Full System Access)</option>
+              <option value="viewer" ${initialRole === 'viewer' ? 'selected' : ''}>👁️ Read-Only Viewer (View Permitted Pages)</option>
+              <option value="finance" ${initialRole === 'finance' ? 'selected' : ''}>💼 Finance / Auditor (Assets &amp; Software Auditing)</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="full" id="inv-perms-preview-box">
+          ${getRoleAccessSummaryHTML(initialRole)}
+        </div>
+      </form>
+    </div>
+  `;
+
+  modal('✉️ Invite User & Provision Role (Email + WhatsApp)', body, [
+    { label: 'Cancel', cls: '', onClick: () => true },
+    {
+      label: '✉️ Dispatch Invite (Email + WhatsApp)',
+      cls: 'primary',
+      onClick: async (root) => {
+        const email = norm(root.querySelector('#inv-email')?.value || '').toLowerCase();
+        const name = norm(root.querySelector('#inv-name')?.value || '');
+        const phone = norm(root.querySelector('#inv-phone')?.value || '');
+        const role = root.querySelector('#inv-role')?.value || 'employee';
+        const pass = root.querySelector('#inv-temp-pass')?.value || tempPass;
+
+        if (!email) {
+          root.err(['Work email address enter karna zaroori hai.']);
+          return false;
+        }
+        if (!EMAIL_RE.test(email)) {
+          root.err(['Kripya ek valid email address enter karein.']);
+          return false;
+        }
+
+        // Save role override & known user in database
+        if (!db.settings.userRoleOverrides) db.settings.userRoleOverrides = {};
+        db.settings.userRoleOverrides[email] = role;
+        trackUserLogin(email);
+        dirtyQueue.settings = true;
+        save();
+        updateAuthUI();
+        render();
+
+        toast(`User ${email} authorized as ${getUserRoleName(role)}! 🔐`, 'ok');
+
+        // Launch dispatch modal
+        setTimeout(() => {
+          showUserInviteModal(email, role, phone, name, pass);
+        }, 150);
+
+        return true;
+      }
+    }
+  ], 'lg');
+
+  setTimeout(() => {
+    const roleSel = document.getElementById('inv-role');
+    const previewBox = document.getElementById('inv-perms-preview-box');
+    if (roleSel && previewBox) {
+      roleSel.onchange = () => {
+        previewBox.innerHTML = getRoleAccessSummaryHTML(roleSel.value);
+      };
+    }
+
+    const regenBtn = document.getElementById('btn-regen-pass');
+    const passInp = document.getElementById('inv-temp-pass');
+    if (regenBtn && passInp) {
+      regenBtn.onclick = () => {
+        passInp.value = 'TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2);
+      };
+    }
+
+    const picker = document.getElementById('inv-emp-picker');
+    if (picker) {
+      picker.oninput = () => {
+        const val = picker.value.trim().toLowerCase();
+        const found = emps.find(e => 
+          (e.email && e.email.toLowerCase() === val) || 
+          (e.name && e.name.toLowerCase() === val) || 
+          (e.emp_id && e.emp_id.toLowerCase() === val)
+        );
+        if (found) {
+          if (found.name) { const n = document.getElementById('inv-name'); if (n) n.value = found.name; }
+          if (found.email) { const em = document.getElementById('inv-email'); if (em) em.value = found.email; }
+          const ph = found.contact || found.phone || '';
+          if (ph) { const p = document.getElementById('inv-phone'); if (p) p.value = ph; }
+        }
+      };
+    }
+  }, 100);
+}
+
+async function showUserInviteModal(email, role, phone = '', name = '', tempPass = '') {
   const roleMeta = DEFAULT_ROLE_PERMS[role] || { name: role, icon: '👤', badgeCls: 'role-hr' };
   const origin = window.location.origin + window.location.pathname;
   const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
@@ -1239,15 +1490,17 @@ async function showUserInviteModal(email, role) {
   // For WhatsApp & Mobile sharing, prefer Wi-Fi IP if on localhost
   const effectiveOrigin = isLocal ? wifiOrigin : origin;
 
+  const password = tempPass || ('TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2));
+  const userName = name || email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
   let emailStatus = '⏳ Sending password setup email via Supabase...';
   let emailOk = false;
-  const tempPass = 'TJ@' + Math.random().toString(36).slice(2, 7).toUpperCase() + '!';
 
   if (sbClient) {
     try {
       await sbClient.auth.signUp({
         email,
-        password: tempPass,
+        password,
         options: { data: { role } }
       });
     } catch (_) {}
@@ -1256,66 +1509,112 @@ async function showUserInviteModal(email, role) {
       const { error } = await sbClient.auth.resetPasswordForEmail(email, { redirectTo: origin });
       if (error) {
         if (error.message.includes('rate limit')) {
-          emailStatus = '⚠️ Supabase email rate limit exceeded (Wait 2-3 mins, ya direct WhatsApp/Copy message bhej dein).';
+          emailStatus = '⚠️ Supabase email rate limit exceeded (Email will arrive shortly, or send directly via WhatsApp below).';
         } else {
           emailStatus = `⚠️ Email notice: ${error.message}`;
         }
       } else {
         emailOk = true;
-        emailStatus = `✅ Password setup email dispatched to ${email}! (Kripya Spam / Junk folder bhi check karein)`;
+        emailStatus = `✅ Password setup & recovery email dispatched to ${email}! (Kripya Spam / Junk folder bhi check karein)`;
       }
     } catch (e) {
       emailStatus = `⚠️ ${e.message}`;
     }
   } else {
-    emailStatus = '⚠️ Supabase not connected. Share direct link below.';
+    emailStatus = '⚠️ Supabase offline. Share invitation via WhatsApp or direct copy below.';
+  }
+
+  // Format phone number for WhatsApp
+  let phoneDigits = (phone || '').replace(/\D/g, '');
+  if (phoneDigits.length === 10) {
+    phoneDigits = '91' + phoneDigits;
+  }
+
+  let accessSummaryLine = '';
+  if (role === 'employee') {
+    accessSummaryLine = '• 🎫 IT Helpdesk & Tickets (Raise & track IT issues, live SLA timer)';
+  } else if (role === 'hr') {
+    accessSummaryLine = '• 👥 Employee Management, Email Creation Tasks & IT Helpdesk';
+  } else if (role === 'it_admin') {
+    accessSummaryLine = '• 👑 Full System Admin Access (All modules, assets, users & cloud settings)';
+  } else if (role === 'viewer') {
+    accessSummaryLine = '• 👁️ Read-Only access to company assets & employee records';
+  } else if (role === 'finance') {
+    accessSummaryLine = '• 💼 Finance & Auditing (Asset book values & software license audits)';
   }
 
   const shareText = `👋 Welcome to TractorJunction IT Portal!
-Aapka account create kar diya gaya hai:
-👤 Role: ${roleMeta.icon} ${roleMeta.name}
-📧 Email: ${email}
-🔑 Temporary Password: ${tempPass}
+Hi ${userName},
+
+Aapka account IT Portal ke liye authorize kar diya gaya hai:
+👤 Assigned Role: ${roleMeta.icon} ${roleMeta.name}
+📧 Work Email: ${email}
+🔑 Temporary Password: ${password}
 🌐 Portal Login Link: ${effectiveOrigin}
 
-Aap email me aaye link par click karke ya direct login karke apna password set kar sakte hain.`;
+📱 What access you have:
+${accessSummaryLine}
+
+Kripya upar diye gaye link par jakar sign in karein aur apna password update kar lein.
+- IT Administrator, TractorJunction`;
+
+  const waLink = phoneDigits 
+    ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(shareText)}`
+    : `https://wa.me/?text=${encodeURIComponent(shareText)}`;
 
   const body = `
     <div style="padding:4px 0;">
       <div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:14px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <b style="font-size:13px;color:var(--text);">${esc(email)}</b>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div>
+            <b style="font-size:14px;color:var(--text);">${esc(userName)}</b>
+            <div style="font-size:12px;color:var(--muted);">${esc(email)}${phone ? ` · 📱 ${esc(phone)}` : ''}</div>
+          </div>
           <span class="user-role-badge ${roleMeta.badgeCls}">${roleMeta.icon} ${esc(roleMeta.name)}</span>
         </div>
-        <div style="font-size:12px;color:${emailOk ? 'var(--ok, #22c55e)' : 'var(--warn, #f59e0b)'};display:flex;align-items:center;gap:6px;">
+        <div style="font-size:12px;color:${emailOk ? 'var(--ok, #22c55e)' : 'var(--warn, #f59e0b)'};display:flex;align-items:center;gap:6px;padding-top:6px;border-top:1px dashed var(--line);">
           ${emailStatus}
+        </div>
+      </div>
+
+      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">PROVISIONED ACCESS LEVEL:</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.45;">
+          ${accessSummaryLine}
         </div>
       </div>
 
       ${isLocal ? `
       <div style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);padding:10px 12px;border-radius:8px;font-size:12px;color:#fde047;margin-bottom:12px;">
         📱 <b>Mobile / Dusre PC ke liye Tip:</b><br>
-        <code>127.0.0.1</code> sirf aapke is laptop par kaam karega. Mobile phone par open karne ke liye humne link me aapka office Wi-Fi IP (<code>${wifiIP}</code>) laga diya hai. Dono devices same Wi-Fi par hone chahiye.
+        <code>127.0.0.1</code> sirf aapke is laptop par kaam karega. Mobile phone par open karne ke liye link me Wi-Fi IP (<code>${wifiIP}</code>) laga diya gaya hai.
       </div>` : ''}
 
-      <p class="hint" style="font-size:12px;margin:0 0 8px;">
-        <b>💡 Pro Tip:</b> Agar user ko email inbox me na dikhe (Spam folder me ho ya Supabase rate limit ho), to aap neeche diya gaya direct invitation message copy karke WhatsApp ya Slack par turant bhej sakte hain:
-      </p>
-
       <div style="position:relative;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);">INVITATION MESSAGE (EMAIL + WHATSAPP):</label>
+        </div>
         <textarea id="invite-share-msg" rows="7" style="width:100%;font-size:12px;font-family:monospace;background:rgba(0,0,0,0.25);padding:10px;border-radius:6px;border:1px solid var(--line);color:var(--text);resize:vertical;" readonly>${esc(shareText)}</textarea>
       </div>
 
       <div class="toolbar" style="margin:0;gap:8px;flex-wrap:wrap;">
-        <button type="button" class="btn primary sm" id="btn-copy-invite-msg">📋 Copy Invitation Message</button>
-        <a href="https://wa.me/?text=${encodeURIComponent(shareText)}" target="_blank" class="btn sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;">💬 Send on WhatsApp</a>
+        ${phoneDigits ? `
+          <a href="${waLink}" target="_blank" class="btn primary sm" style="background:#25D366;border-color:#25D366;color:#fff;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+            💬 Send to WhatsApp (+${phoneDigits})
+          </a>
+        ` : `
+          <a href="${waLink}" target="_blank" class="btn primary sm" style="background:#25D366;border-color:#25D366;color:#fff;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+            💬 Open WhatsApp to Share
+          </a>
+        `}
+        <button type="button" class="btn sm" id="btn-copy-invite-msg">📋 Copy Invitation Text</button>
         <button type="button" class="btn sm" id="btn-resend-invite-email" data-email="${esc(email)}">📧 Re-send Email</button>
       </div>
     </div>
   `;
 
-  modal(`✉️ User Profile & Invite — ${email}`, body, [
-    { label: 'Close', cls: '', onClick: () => true }
+  modal(`✉️ Invite & Access Details — ${email}`, body, [
+    { label: 'Done', cls: 'primary', onClick: () => true }
   ], 'md');
 
   setTimeout(() => {
@@ -4275,6 +4574,7 @@ function showEmp(id) {
         ? `<button class="btn sm" data-act="del-it-member" data-val="${esc(matchedIT)}" title="Currently in IT Team (Click to remove)" style="color:var(--ok)">✔ IT Person</button>` 
         : `<button class="btn sm" data-act="add-emp-to-it" data-name="${esc(e.name)}" title="Add this employee as an IT Team Person">🛠️ + Add to IT Team</button>`
       ) : ''}
+      ${isITAdmin() && e.email ? `<button class="btn sm" data-act="invite-emp-user" data-id="${e.id}" title="Invite this employee to Portal (Email + WhatsApp)">✉️ Invite to Portal</button>` : ''}
       ${canDo('canAssignAsset') ? `<button class="btn sm" data-act="handover-sig" data-emp="${e.id}">✍ E-Handover</button>` : ''}
       ${canDo('canAssignAsset') ? `<button class="btn sm" data-act="print-handover" data-emp="${e.id}">🖨 Handover form</button>` : ''}
       ${(e.status || 'Active') !== 'Exited' ? `<button class="btn sm" data-act="offboard-wizard" data-id="${e.id}">${canDo('canAssignAsset') ? '🚪 Exit Clearance' : '🚪 Mark Exited'}</button>` : `<button class="btn sm" data-act="print-clearance" data-id="${e.id}">🖨 Clearance letter</button>`}
@@ -5082,11 +5382,16 @@ PAGES.settings = () => {
       <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; margin-bottom: 8px;">
         <!-- Card A: User Role Assignment -->
         <div class="card" style="display:flex;flex-direction:column;margin-bottom:0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <h4 style="margin:0;font-size:14px;">👥 Assigned User Roles</h4>
-            <span class="badge b-acc" style="font-size:11px;">${allKnownEmails.length} User(s)</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+            <div>
+              <h4 style="margin:0;font-size:14px;">👥 Assigned User Roles</h4>
+              <p class="hint" style="margin:2px 0 0;font-size:12px;">Authorized users jinhe IT Admin ne invite kiya hai (Invite-Only System):</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="badge b-acc" style="font-size:11px;">${allKnownEmails.length} Authorized</span>
+              <button class="btn primary sm" data-act="open-invite-user-modal">✉️ + Invite New User (Email + WhatsApp)</button>
+            </div>
           </div>
-          <p class="hint" style="margin:2px 0 10px;font-size:12px;">Portal users ko specific role assign karein (jaise HR, Viewer, IT Admin):</p>
           
           <div class="inline" style="gap:8px;margin-bottom:12px;background:var(--panel2);padding:10px;border-radius:6px;border:1px solid var(--line);">
             <input id="assign-role-email" placeholder="user@tractorjunction.com" style="flex:1.2;font-size:12px;">
@@ -6049,6 +6354,23 @@ function bindGlobal() {
         toast('All settings cards collapsed', 'ok');
         break;
       }
+      case 'open-invite-user-modal': {
+        openInviteUserModal();
+        break;
+      }
+      case 'invite-emp-user': {
+        const e = IX.empId.get(d.id);
+        if (!e) return;
+        const em = (e.email || '').toLowerCase().trim();
+        const role = (db.settings.userRoleOverrides && db.settings.userRoleOverrides[em]) || 'employee';
+        openInviteUserModal({
+          email: em,
+          name: e.name,
+          phone: e.contact || e.phone,
+          role
+        });
+        break;
+      }
       case 'save-user-role-btn': {
         const emailInp = $('#assign-role-email');
         const roleSel = $('#assign-role-select');
@@ -6056,22 +6378,26 @@ function bindGlobal() {
         const role = roleSel?.value || 'hr';
         if (!email) return toast('Please enter a user email address', 'warn');
         if (!EMAIL_RE.test(email)) return toast('Please enter a valid email address', 'warn');
-        if (!db.settings.userRoleOverrides) db.settings.userRoleOverrides = {};
-        db.settings.userRoleOverrides[email] = role;
-        trackUserLogin(email);
-        dirtyQueue.settings = true;
-        save();
-        updateAuthUI();
-        render();
-        toast(`Assigned ${DEFAULT_ROLE_PERMS[role]?.name || role} role to ${email}! 🔐`, 'ok');
-        showUserInviteModal(email, role);
+        const emp = (db.employees || []).find(e => (e.email || '').toLowerCase() === email);
+        openInviteUserModal({
+          email,
+          role,
+          name: emp?.name,
+          phone: emp?.contact || emp?.phone
+        });
         break;
       }
       case 'send-invite-user': {
         const email = norm(d.email || '').toLowerCase();
         if (!email) return;
         const role = (db.settings.userRoleOverrides && db.settings.userRoleOverrides[email]) || (email.includes('hr') ? 'hr' : 'it_admin');
-        showUserInviteModal(email, role);
+        const emp = (db.employees || []).find(e => (e.email || '').toLowerCase() === email);
+        openInviteUserModal({
+          email,
+          role,
+          name: emp?.name,
+          phone: emp?.contact || emp?.phone
+        });
         break;
       }
       case 'del-user-role': {

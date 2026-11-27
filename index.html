@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#121a2b">
   <title>IT Asset Manager</title>
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 
 <body class="on-dashboard">
@@ -19,9 +19,12 @@
         <p class="auth-sub">IT Assets &amp; Employee Management System</p>
       </div>
 
-      <div class="auth-tabs">
-        <button type="button" class="auth-tab on" id="tab-login" data-auth-tab="login">Sign In</button>
-        <button type="button" class="auth-tab" id="tab-signup" data-auth-tab="signup">Register / New User</button>
+      <div class="auth-notice" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:12px 14px;margin-bottom:16px;text-align:left;display:flex;align-items:flex-start;gap:10px;">
+        <span style="font-size:18px;line-height:1.2;">🔒</span>
+        <div style="font-size:12px;color:var(--text);line-height:1.45;">
+          <b>Authorized Company Access Only</b><br>
+          <span style="color:var(--muted);font-size:11.5px;">Public registration is disabled. Only employees invited by IT Administrator can access this portal.</span>
+        </div>
       </div>
 
       <form id="auth-form" autocomplete="on">
@@ -35,26 +38,15 @@
           <input type="password" id="auth-password" placeholder="••••••••" required autocomplete="current-password">
         </div>
 
-        <div id="forgot-pass-box" style="display:flex;justify-content:flex-end;margin-top:-6px;margin-bottom:12px;">
+        <div id="forgot-pass-box" style="display:flex;justify-content:space-between;align-items:center;margin-top:-6px;margin-bottom:14px;">
+          <span style="font-size:11px;color:var(--muted);">Invite-only portal</span>
           <button type="button" id="btn-forgot-password" style="background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;padding:0;">Forgot password / Need invite link?</button>
-        </div>
-
-        <div class="auth-field" id="role-select-box" style="display:none;">
-          <label>Assign Role / Department</label>
-          <select id="auth-role">
-            <option value="employee">👤 Employee (Self-Service IT Helpdesk &amp; Tickets)</option>
-            <option value="hr">👤 HR Team (Employee Details &amp; Onboarding)</option>
-            <option value="it_admin">👑 IT Admin (Full System Access)</option>
-            <option value="viewer">👁️ Read-Only Viewer (View Permitted Pages)</option>
-            <option value="finance">💼 Finance / Auditor (Assets &amp; Software Auditing)</option>
-          </select>
-          <span class="auth-role-hint">Role permissions can also be customized anytime by IT Admin from Settings.</span>
         </div>
 
         <div id="auth-error" class="auth-error" style="display:none;"></div>
         <div id="auth-success" class="auth-success" style="display:none;"></div>
 
-        <button type="submit" class="btn primary auth-submit-btn" id="auth-submit-btn">Sign In</button>
+        <button type="submit" class="btn primary auth-submit-btn" id="auth-submit-btn" style="width:100%;">Sign In</button>
       </form>
     </div>
   </div>
@@ -122,7 +114,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 
 </html>
