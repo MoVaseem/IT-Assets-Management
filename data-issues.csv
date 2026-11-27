@@ -1,0 +1,35 @@
+﻿Severity,Category,Detail
+warn,Name on asset differs from employee master,"LAP-376: ""Sakshi Chawla"" vs TJ00236 ""Mohd Tasleem"""
+warn,Name on asset differs from employee master,"LAP-603: ""Mohd Tasleem"" vs TJ00198 ""Rakesh Sharma"""
+err,Windows not genuine,LAP-63 (Karan)
+warn,Name on asset differs from employee master,"MOB-118: ""Aiay Kumar"" vs AW0233 ""Ajay kumar"""
+warn,Asset holder not found in employee master,MOB-149 → Rahul Singh 1  
+warn,Asset holder not found in employee master,MOB-158 → Payal    ⟶ did you mean AW0388?
+warn,Name on asset differs from employee master,"MOB-162: ""Parwez Khan"" vs TJ00504 ""Tushar Metiyan"""
+warn,Asset holder not found in employee master,MOB-164 → Nikhil Sharma  
+warn,Asset holder not found in employee master,MOB-96 → Tushar Verma    ⟶ did you mean AW1180?
+warn,Asset holder not found in employee master,MOB-160 → Sushant  
+warn,Asset holder not found in employee master,"MOB-02,117 → Garima Naval    ⟶ did you mean AW1390?"
+warn,Asset holder not found in employee master,MOB-94 → Ekta  
+warn,Asset holder not found in employee master,MOB-87 → Bushra Malik    ⟶ did you mean AW1341?
+warn,Asset holder not found in employee master,MOB-168 → Mujjamil Mulani  
+warn,Asset holder not found in employee master,MOB-170 → Anjali Chauhan    ⟶ did you mean TJ00213 / TJ00595?
+warn,Asset holder not found in employee master,SIM-9216079365 → Pawan  
+warn,Asset holder not found in employee master,MOB-79 → Mahatab  
+warn,Asset holder not found in employee master,MOB-147 → Pratyush  
+warn,Asset holder not found in employee master,MOB-136 → Sachin  
+warn,Asset holder not found in employee master,MOB-39 → Diwakr Thapa  
+warn,Asset holder not found in employee master,SIM-9216075256 → Shubham  
+warn,Asset holder not found in employee master,MOB-49 → Satyam Sahu    ⟶ did you mean AW2127?
+warn,Asset holder not found in employee master,MOB-178 → Nivedita Pathak    ⟶ did you mean AW1532?
+warn,Name on asset differs from employee master,"EXT-SCR-06: ""Mohd Tasleem"" vs TJ00198 ""Rakesh Sharma"""
+warn,Asset holder not found in employee master,EXT-SCR-05 → Tarun  
+warn,Asset holder not found in employee master,CPU-17 → 1TB HDD WD Romove  
+warn,Name on asset differs from employee master,"MOU-013: ""Dhawanit Bhatnagar"" vs TJ00198 ""Rakesh Sharma"""
+warn,Asset holder not found in employee master,MOU-026 → Casio Calculator  
+warn,Asset holder not found in employee master,MOB-194 → Shubham  
+warn,Employee holds more than one Laptop,"ANIMESH AGERWAL (TJ00062): LAP-65, LAP-298"
+warn,Employee holds more than one Laptop,"Atul Patel (TJ00308): LAP-565, LAP-114"
+warn,Employee holds more than one Desktop,"Farhan Khan (TJ00518): CPU-41, CPU-42"
+err,Pirated / unlicensed software,Microsoft Office — used by: All Dept.
+err,Pirated / unlicensed software,Microsoft Windows — used by: All Dept.

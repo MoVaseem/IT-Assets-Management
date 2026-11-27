@@ -1,0 +1,28 @@
+﻿File,Row,Kind,Key,Type,Problem
+1-employees,26,Employee,TJ00199,error,"Name is blank in sheet (email: rakeshsharma@tractorjunction.com) — not imported, add manually"
+1-employees,258,Employee,TJ00431,error,Duplicate Email: dineshbabu@tractorjunction.com already belongs to Dinesh Kumar (TJ00399).
+1-employees,472,Employee,TJ00645,error,Duplicate Email: dipikadoley@tractorjunction.com already belongs to Dipika Doley (TJ00593).
+2-laptops,78,Laptop,LAP-508,error,Duplicate Asset Tag — LAP-508 already exists (with Jay Kumar Gupta). This row: Gaurav
+2-laptops,100,Laptop,LAP-586,error,Duplicate Asset Tag — LAP-586 already exists (with Rishi Kant). This row: Venkateshwari Murugan
+2-laptops,153,Laptop,LAP-530,error,Duplicate Asset Tag — LAP-530 already exists (with Bharat Pal). This row: Abhishek Bhadoriya
+2-laptops,175,Laptop,LAP-552,error,Duplicate Asset Tag — LAP-552 already exists (with Aarti Yadav). This row: Aarti Yadav
+2-laptops,190,Laptop,LAP-,error,"Asset tag missing/incomplete for ""Ankur Singh"""
+2-laptops,219,Laptop,LAP-466,error,Duplicate Asset Tag — LAP-466 already exists (with Arun Dwivedi). This row: Puran Chandra Dhaundhiyal
+2-laptops,222,Laptop,LAP-493,error,Duplicate Asset Tag — LAP-493 already exists (with Prasanth Kumar Reddy). This row: Archit Gaur
+2-laptops,225,Laptop,LAP-526,error,Duplicate Asset Tag — LAP-526 already exists (with Rahul Kumar). This row: Shipranshu Pandey
+2-laptops,226,Laptop,LAP-51,error,Duplicate Asset Tag — LAP-51 already exists (with Shambhavi Kumari). This row: Ayushi Srivastava
+2-laptops,228,Laptop,LAP-631,error,Duplicate Asset Tag — LAP-631 already exists (with Manan Chaturvedi). This row: Anjaneya Prasad Prabhala
+2-laptops,230,Laptop,LAP-623,error,Duplicate Asset Tag — LAP-623 already exists (with Arun Kumar Gupta). This row: Neha Kumari
+2-laptops,231,Laptop,LAP-359,error,Duplicate Asset Tag — LAP-359 already exists (with Ankit). This row: Prateesh Srivastav
+2-laptops,236,Laptop,LAP-170,error,Duplicate Asset Tag — LAP-170 already exists (with Om Prakash). This row: Amandeep Sidhu
+3-mobiles,35,Mobile,MOB-163,skip,SIM 9773363872 duplicate of SIM-9773363872 (Anand Agrawal) — device imported WITHOUT that SIM (this row: Jatin Sharma)
+3-mobiles,59,Mobile,MOB-135,error,Duplicate Asset Tag — MOB-135 already exists (with Vinay Mishra). This row: Vinay Mishra
+3-mobiles,60,SIM,(blank),error,"Asset tag missing/incomplete for ""Pratiksha Gupta."""
+3-mobiles,68,Mobile,MOB-169,error,Duplicate Asset Tag — MOB-169 already exists (with Vani Singh). This row: Anjali Sharma
+3-mobiles,69,Mobile,MOB-133,skip,SIM 9216079375 duplicate of MOB-169 (Vani Singh) — device imported WITHOUT that SIM (this row: Ankur Singh)
+3-mobiles,73,Mobile,MOB-126,error,Duplicate Asset Tag — MOB-126 already exists (with Saumya Saxena). This row: Samrendra Singh
+3-mobiles,81,Mobile,MOB-82,skip,SIM 9257045235 duplicate of MOB-79 (Mahatab) — device imported WITHOUT that SIM (this row: Kuldeep Upadhyay)
+4-desktops-misc,22,Desktop,CPU-20,error,Duplicate Asset Tag — CPU-20 already exists (with Anjali Lala). This row: Priyansh Prajapati
+4-desktops-misc,26,Desktop,CPU-26,error,Duplicate Asset Tag — CPU-26 already exists (with Rashid khan). This row: —
+4-desktops-misc,48,Mouse,7CH2090DRS,skip,Serial already exists on MOU-005 — skipped
+4-desktops-misc,49,Mouse,CN-0GXCWV-LO300-2AL-03TV,skip,Serial already exists on MOU-012 — skipped
