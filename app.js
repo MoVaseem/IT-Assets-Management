@@ -1368,156 +1368,29 @@ function getRoleAccessSummaryHTML(role) {
   `;
 }
 
-function openInviteUserModal(preset = {}) {
-  const emps = Array.isArray(db.employees) ? db.employees : [];
-  const datalistOptions = emps.slice(0, 300).map(e => 
-    `<option value="${esc(e.email || '')}" data-name="${esc(e.name || '')}" data-phone="${esc(e.contact || e.phone || '')}">${esc(e.emp_id ? e.emp_id + ' - ' : '')}${esc(e.name || '')} (${esc(e.dept || e.department || '')})</option>`
-  ).join('');
+function getRoleHintText(r) {
+  if (r === 'employee') {
+    return '🛡️ <b>Access:</b> <span class="badge b-acc">IT Helpdesk Only</span> (All other modules completely hidden)';
+  } else if (r === 'hr') {
+    return '🛡️ <b>Access:</b> <span class="badge b-acc">Employees, Email Tasks &amp; Helpdesk</span>';
+  } else if (r === 'it_admin') {
+    return '👑 <b>Access:</b> <span class="badge b-ok">Full Super Admin</span> (All 11 modules permitted)';
+  } else if (r === 'viewer') {
+    return '👁️ <b>Access:</b> <span class="badge b-info">Read-Only Viewer</span>';
+  } else if (r === 'finance') {
+    return '💼 <b>Access:</b> <span class="badge b-warn">Assets &amp; Software Auditing</span>';
+  }
+  return '';
+}
 
-  const initialRole = preset.role || 'employee';
-  const initialEmail = preset.email || '';
-  const initialName = preset.name || '';
-  const initialPhone = preset.phone || '';
-  const tempPass = 'TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2);
-
-  const body = `
-    <div style="padding:4px 0;">
-      <p class="hint" style="margin-top:0;font-size:12px;">
-        Naye user ko portal access dene ke liye unki details aur role set karein. Invite link <b>Work Email aur WhatsApp dono par</b> bheja jayega:
-      </p>
-
-      <form id="invite-user-form" class="form-grid" style="gap:12px;margin-top:8px;">
-        <div class="full" style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;">
-          <label style="font-size:11.5px;font-weight:600;display:block;margin-bottom:4px;color:var(--muted);">
-            ⚡ Quick Auto-Fill from Employee Master (Optional):
-          </label>
-          <input type="text" id="inv-emp-picker" list="dl_invite_emps" placeholder="Type employee name or email to auto-fill..." style="width:100%;font-size:12px;">
-          <datalist id="dl_invite_emps">${datalistOptions}</datalist>
-          <span style="font-size:11px;color:var(--muted);margin-top:3px;display:block;">Select karne par Name, Email aur Mobile number automatically fill ho jayenge.</span>
-        </div>
-
-        <label><b>Employee / User Name</b>
-          <input type="text" id="inv-name" placeholder="e.g. Rahul Sharma" value="${esc(initialName)}">
-        </label>
-
-        <label><b>Work Email Address *</b>
-          <input type="email" id="inv-email" placeholder="name@tractorjunction.com" required value="${esc(initialEmail)}">
-        </label>
-
-        <label><b>Mobile / WhatsApp Number (for WhatsApp invite)</b>
-          <input type="tel" id="inv-phone" placeholder="e.g. 9876543210" value="${esc(initialPhone)}">
-          <span class="hint" style="font-size:11px;margin-top:2px;">10-digit mobile number for direct WhatsApp invite link</span>
-        </label>
-
-        <label><b>Temporary Password (Auto-Generated)</b>
-          <div style="display:flex;gap:6px;">
-            <input type="text" id="inv-temp-pass" value="${esc(tempPass)}" style="font-family:monospace;font-weight:700;letter-spacing:1px;" readonly>
-            <button type="button" class="btn sm" id="btn-regen-pass" title="Generate another password">🎲</button>
-          </div>
-        </label>
-
-        <div class="full">
-          <label><b>Assign Portal Role *</b>
-            <select id="inv-role" style="font-weight:600;font-size:13px;padding:6px 10px;">
-              <option value="employee" ${initialRole === 'employee' ? 'selected' : ''}>👤 Employee (Self-Service IT Helpdesk &amp; Tickets Only)</option>
-              <option value="hr" ${initialRole === 'hr' ? 'selected' : ''}>👤 HR Team (Employee Directory &amp; Onboarding)</option>
-              <option value="it_admin" ${initialRole === 'it_admin' ? 'selected' : ''}>👑 IT Admin (Full System Access)</option>
-              <option value="viewer" ${initialRole === 'viewer' ? 'selected' : ''}>👁️ Read-Only Viewer (View Permitted Pages)</option>
-              <option value="finance" ${initialRole === 'finance' ? 'selected' : ''}>💼 Finance / Auditor (Assets &amp; Software Auditing)</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="full" id="inv-perms-preview-box">
-          ${getRoleAccessSummaryHTML(initialRole)}
-        </div>
-      </form>
-    </div>
-  `;
-
-  modal('✉️ Invite User & Provision Role (Email + WhatsApp)', body, [
-    { label: 'Cancel', cls: '', onClick: () => true },
-    {
-      label: '✉️ Dispatch Invite (Email + WhatsApp)',
-      cls: 'primary',
-      onClick: async (root) => {
-        const email = norm(root.querySelector('#inv-email')?.value || '').toLowerCase();
-        const name = norm(root.querySelector('#inv-name')?.value || '');
-        const phone = norm(root.querySelector('#inv-phone')?.value || '');
-        const role = root.querySelector('#inv-role')?.value || 'employee';
-        const pass = root.querySelector('#inv-temp-pass')?.value || tempPass;
-
-        if (!email) {
-          root.err(['Work email address enter karna zaroori hai.']);
-          return false;
-        }
-        if (!EMAIL_RE.test(email)) {
-          root.err(['Kripya ek valid email address enter karein.']);
-          return false;
-        }
-
-        // Prevent IT Admin from accidentally downgrading themselves
-        if (email.includes('vaseem') || email === 'movaseem@tractorjunction.com') {
-          root.err(['⚠️ Aap apna IT Admin account Employee me convert nahi kar sakte. Agar employee view test karna hai, to kisi test user email (jaise test.employee@tractorjunction.com) ko invite karein.']);
-          return false;
-        }
-
-        // Save role override & known user in database
-        if (!db.settings.userRoleOverrides) db.settings.userRoleOverrides = {};
-        db.settings.userRoleOverrides[email] = role;
-        trackUserLogin(email);
-        dirtyQueue.settings = true;
-        save();
-        updateAuthUI();
-        render();
-
-        toast(`User ${email} authorized as ${getUserRoleName(role)}! 🔐`, 'ok');
-
-        // Launch dispatch modal
-        setTimeout(() => {
-          showUserInviteModal(email, role, phone, name, pass);
-        }, 150);
-
-        return true;
-      }
-    }
-  ], 'lg');
-
-  setTimeout(() => {
-    const roleSel = document.getElementById('inv-role');
-    const previewBox = document.getElementById('inv-perms-preview-box');
-    if (roleSel && previewBox) {
-      roleSel.onchange = () => {
-        previewBox.innerHTML = getRoleAccessSummaryHTML(roleSel.value);
-      };
-    }
-
-    const regenBtn = document.getElementById('btn-regen-pass');
-    const passInp = document.getElementById('inv-temp-pass');
-    if (regenBtn && passInp) {
-      regenBtn.onclick = () => {
-        passInp.value = 'TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2);
-      };
-    }
-
-    const picker = document.getElementById('inv-emp-picker');
-    if (picker) {
-      picker.oninput = () => {
-        const val = picker.value.trim().toLowerCase();
-        const found = emps.find(e => 
-          (e.email && e.email.toLowerCase() === val) || 
-          (e.name && e.name.toLowerCase() === val) || 
-          (e.emp_id && e.emp_id.toLowerCase() === val)
-        );
-        if (found) {
-          if (found.name) { const n = document.getElementById('inv-name'); if (n) n.value = found.name; }
-          if (found.email) { const em = document.getElementById('inv-email'); if (em) em.value = found.email; }
-          const ph = found.contact || found.phone || '';
-          if (ph) { const p = document.getElementById('inv-phone'); if (p) p.value = ph; }
-        }
-      };
-    }
-  }, 100);
+function openInviteUserModal() {
+  const el = $('#assign-role-email');
+  if (el) {
+    el.focus();
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.5)';
+    setTimeout(() => { el.style.boxShadow = ''; }, 1500);
+  }
 }
 
 function getIsolatedAuthClient() {
@@ -5468,20 +5341,42 @@ PAGES.settings = () => {
             </div>
           </div>
           
-          <div class="inline" style="gap:10px;margin-bottom:14px;background:var(--panel2);padding:12px 14px;border-radius:8px;border:1px solid var(--line);align-items:center;flex-wrap:wrap;">
-            <div style="flex:2;min-width:280px;">
-              <input id="assign-role-email" placeholder="Enter work email (e.g. user@tractorjunction.com)" style="width:100%;font-size:13px;padding:8px 12px;">
+          <div style="margin-bottom:16px;background:var(--panel2);padding:14px 16px;border-radius:10px;border:1px solid var(--line);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+              <span style="font-size:12.5px;font-weight:700;color:var(--text);display:inline-flex;align-items:center;gap:6px;">
+                <span>⚡ Quick User Provisioning &amp; Dual Invite (Email + WhatsApp):</span>
+              </span>
+              <span id="assign-role-hint-badge" style="font-size:12px;color:var(--muted);">
+                ${getRoleHintText('employee')}
+              </span>
             </div>
-            <div style="flex:1.2;min-width:200px;">
-              <select id="assign-role-select" style="width:100%;font-size:13px;padding:8px 10px;font-weight:600;">
-                <option value="employee">👤 Employee (Helpdesk Only)</option>
-                <option value="hr">👤 HR Team</option>
-                <option value="it_admin">👑 IT Admin</option>
-                <option value="viewer">👁️ Read-Only Viewer</option>
-                <option value="finance">💼 Finance / Auditor</option>
-              </select>
+
+            <div class="inline" style="gap:10px;align-items:center;flex-wrap:wrap;">
+              <div style="flex:1.8;min-width:240px;">
+                <input id="assign-role-email" list="dl_quick_assign_emps" placeholder="Work Email (e.g. user@tractorjunction.com)" style="width:100%;font-size:13px;padding:9px 12px;" autocomplete="off">
+                <datalist id="dl_quick_assign_emps">
+                  ${(db.employees || []).slice(0, 300).map(e => `<option value="${esc(e.email || '')}">${esc(e.emp_id ? e.emp_id + ' - ' : '')}${esc(e.name || '')} (${esc(e.contact || e.phone || '')})</option>`).join('')}
+                </datalist>
+              </div>
+
+              <div style="flex:1.4;min-width:190px;">
+                <input id="assign-role-phone" type="tel" placeholder="Mobile / WhatsApp No. (e.g. 9876543210)" style="width:100%;font-size:13px;padding:9px 12px;">
+              </div>
+
+              <div style="flex:1.2;min-width:180px;">
+                <select id="assign-role-select" style="width:100%;font-size:13px;padding:9px 10px;font-weight:600;">
+                  <option value="employee">👤 Employee (Helpdesk Only)</option>
+                  <option value="hr">👤 HR Team (Employees &amp; Onboarding)</option>
+                  <option value="it_admin">👑 IT Admin (Full System Access)</option>
+                  <option value="viewer">👁️ Read-Only Viewer</option>
+                  <option value="finance">💼 Finance / Auditor</option>
+                </select>
+              </div>
+
+              <button class="btn primary" data-act="save-user-role-btn" style="padding:9px 20px;font-size:13px;font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;">
+                ✉️ + Assign &amp; Send Invite
+              </button>
             </div>
-            <button class="btn primary" data-act="save-user-role-btn" style="padding:8px 16px;font-size:13px;font-weight:600;">+ Assign &amp; Invite</button>
           </div>
 
           <div style="display:flex;flex-direction:column;gap:8px;max-height:480px;overflow-y:auto;padding-right:4px;">
@@ -6247,6 +6142,25 @@ function bindGlobal() {
       render();
       return;
     }
+    if (e.target && e.target.id === 'assign-role-select') {
+      const hint = document.getElementById('assign-role-hint-badge');
+      if (hint) {
+        hint.innerHTML = getRoleHintText(e.target.value);
+      }
+      return;
+    }
+  });
+  document.addEventListener('input', e => {
+    if (e.target && e.target.id === 'assign-role-email') {
+      const val = (e.target.value || '').trim().toLowerCase();
+      const phoneInp = document.getElementById('assign-role-phone');
+      if (phoneInp && !phoneInp.value) {
+        const found = (db.employees || []).find(emp => (emp.email || '').toLowerCase() === val);
+        if (found && (found.contact || found.phone)) {
+          phoneInp.value = found.contact || found.phone;
+        }
+      }
+    }
   });
   document.addEventListener('toggle', e => {
     if (e.target && e.target.classList && e.target.classList.contains('settings-accordion')) {
@@ -6454,7 +6368,13 @@ function bindGlobal() {
         break;
       }
       case 'open-invite-user-modal': {
-        openInviteUserModal();
+        const el = $('#assign-role-email');
+        if (el) {
+          el.focus();
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.5)';
+          setTimeout(() => { el.style.boxShadow = ''; }, 1500);
+        }
         break;
       }
       case 'invite-emp-user': {
@@ -6462,28 +6382,49 @@ function bindGlobal() {
         if (!e) return;
         const em = (e.email || '').toLowerCase().trim();
         const role = (db.settings.userRoleOverrides && db.settings.userRoleOverrides[em]) || 'employee';
-        openInviteUserModal({
-          email: em,
-          name: e.name,
-          phone: e.contact || e.phone,
-          role
-        });
+        const tempPass = 'TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2);
+        if (!db.settings.userRoleOverrides) db.settings.userRoleOverrides = {};
+        db.settings.userRoleOverrides[em] = role;
+        trackUserLogin(em);
+        dirtyQueue.settings = true;
+        save();
+        updateAuthUI();
+        render();
+        showUserInviteModal(em, role, e.contact || e.phone || '', e.name, tempPass);
         break;
       }
       case 'save-user-role-btn': {
         const emailInp = $('#assign-role-email');
+        const phoneInp = $('#assign-role-phone');
         const roleSel = $('#assign-role-select');
         const email = norm(emailInp?.value || '').toLowerCase();
-        const role = roleSel?.value || 'hr';
-        if (!email) return toast('Please enter a user email address', 'warn');
+        let phone = norm(phoneInp?.value || '');
+        const role = roleSel?.value || 'employee';
+
+        if (!email) return toast('Please enter a user work email address', 'warn');
         if (!EMAIL_RE.test(email)) return toast('Please enter a valid email address', 'warn');
+
+        if (email.includes('vaseem') || email === 'movaseem@tractorjunction.com') {
+          return toast('⚠️ Aap apna Super IT Admin account demote nahi kar sakte.', 'warn');
+        }
+
         const emp = (db.employees || []).find(e => (e.email || '').toLowerCase() === email);
-        openInviteUserModal({
-          email,
-          role,
-          name: emp?.name,
-          phone: emp?.contact || emp?.phone
-        });
+        if (!phone && emp) {
+          phone = emp.contact || emp.phone || '';
+        }
+        const name = emp ? emp.name : email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const tempPass = 'TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2);
+
+        if (!db.settings.userRoleOverrides) db.settings.userRoleOverrides = {};
+        db.settings.userRoleOverrides[email] = role;
+        trackUserLogin(email);
+        dirtyQueue.settings = true;
+        save();
+        updateAuthUI();
+        render();
+
+        toast(`User ${email} authorized as ${getUserRoleName(role)}! 🔐`, 'ok');
+        showUserInviteModal(email, role, phone, name, tempPass);
         break;
       }
       case 'send-invite-user': {
@@ -6491,12 +6432,10 @@ function bindGlobal() {
         if (!email) return;
         const role = (db.settings.userRoleOverrides && db.settings.userRoleOverrides[email]) || (email.includes('hr') ? 'hr' : 'it_admin');
         const emp = (db.employees || []).find(e => (e.email || '').toLowerCase() === email);
-        openInviteUserModal({
-          email,
-          role,
-          name: emp?.name,
-          phone: emp?.contact || emp?.phone
-        });
+        const name = emp ? emp.name : email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const phone = emp ? (emp.contact || emp.phone || '') : '';
+        const tempPass = 'TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2);
+        showUserInviteModal(email, role, phone, name, tempPass);
         break;
       }
       case 'del-user-role': {
