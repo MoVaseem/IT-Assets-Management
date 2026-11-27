@@ -1395,9 +1395,9 @@ function openInviteUserModal() {
 
 function getIsolatedAuthClient() {
   if (!window.supabase) return null;
-  const cfg = db.settings?.supabase || DEFAULT_SETTINGS.supabase;
-  const url = cfg.url || DEFAULT_SETTINGS.supabase.url;
-  const key = cfg.anonKey || DEFAULT_SETTINGS.supabase.anonKey;
+  const cfg = db.settings?.supabase || SUPABASE_CONFIG;
+  const url = cfg?.url || SUPABASE_CONFIG?.url;
+  const key = cfg?.anonKey || SUPABASE_CONFIG?.anonKey;
   if (!url || !key) return null;
   try {
     return window.supabase.createClient(url, key, {
@@ -1426,40 +1426,6 @@ async function showUserInviteModal(email, role, phone = '', name = '', tempPass 
 
   const password = tempPass || ('TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2));
   const userName = name || email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-
-  let emailStatus = '⏳ Sending password setup email via Supabase...';
-  let emailOk = false;
-
-  const isolatedClient = getIsolatedAuthClient();
-  if (isolatedClient) {
-    // 1. Create user in Supabase Auth using ISOLATED client (never touches Admin session!)
-    try {
-      await isolatedClient.auth.signUp({
-        email,
-        password,
-        options: { data: { role } }
-      });
-    } catch (_) {}
-
-    // 2. Dispatch password setup & recovery email
-    try {
-      const { error } = await isolatedClient.auth.resetPasswordForEmail(email, { redirectTo: origin });
-      if (error) {
-        if (error.message.includes('rate limit')) {
-          emailStatus = '⚠️ Supabase email rate limit reached (Email will arrive shortly, or send directly via WhatsApp below).';
-        } else {
-          emailStatus = `⚠️ Email notice: ${error.message}`;
-        }
-      } else {
-        emailOk = true;
-        emailStatus = `✅ Password setup & recovery email dispatched to ${email}! (Kripya Spam / Junk folder bhi check karein)`;
-      }
-    } catch (e) {
-      emailStatus = `⚠️ ${e.message}`;
-    }
-  } else {
-    emailStatus = '⚠️ Supabase offline. Share invitation via WhatsApp or direct copy below.';
-  }
 
   // Format phone number for WhatsApp
   let phoneDigits = (phone || '').replace(/\D/g, '');
@@ -1499,9 +1465,75 @@ Kripya upar diye gaye link par jakar sign in karein aur apna password update kar
     ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(shareText)}`
     : `https://wa.me/?text=${encodeURIComponent(shareText)}`;
 
+  // Open WhatsApp Web/App immediately in new tab so browser popup blocker doesn't block it
+  if (phoneDigits) {
+    try {
+      window.open(waLink, '_blank');
+    } catch (_) {}
+  }
+
+  let emailStatus = '⏳ Sending password setup email via Supabase...';
+  let emailOk = false;
+
+  const isolatedClient = getIsolatedAuthClient();
+  if (isolatedClient) {
+    // 1. Create user in Supabase Auth using ISOLATED client (never touches Admin session!)
+    try {
+      await isolatedClient.auth.signUp({
+        email,
+        password,
+        options: { data: { role } }
+      });
+    } catch (_) {}
+
+    // 2. Dispatch password setup & recovery email
+    try {
+      const { error } = await isolatedClient.auth.resetPasswordForEmail(email, { redirectTo: origin });
+      if (error) {
+        if (error.message && error.message.toLowerCase().includes('rate limit')) {
+          emailStatus = '⚠️ Supabase email rate limit reached (Free tier: 3 emails/hr). Temporary login credentials WhatsApp se bheje ja sakte hain.';
+        } else {
+          emailStatus = `⚠️ Supabase email status: ${error.message}`;
+        }
+      } else {
+        emailOk = true;
+        emailStatus = `✅ Password setup & recovery email dispatched to ${email}! (Kripya Spam / Junk folder bhi check karein)`;
+      }
+    } catch (e) {
+      emailStatus = `⚠️ ${e.message}`;
+    }
+  } else {
+    emailStatus = '⚠️ Supabase auth offline. Share invitation via WhatsApp or direct copy below.';
+  }
+
   const body = `
     <div style="padding:4px 0;">
-      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:14px;">
+      ${phoneDigits ? `
+      <div style="background:linear-gradient(135deg, #075e54, #128c7e);border-radius:8px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,0.2);">
+        <div>
+          <div style="font-weight:700;color:#fff;font-size:13.5px;display:flex;align-items:center;gap:6px;">
+            <span>💬 WhatsApp Invite Ready</span>
+            <span style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:12px;font-size:11px;">+${phoneDigits}</span>
+          </div>
+          <div style="color:rgba(255,255,255,0.9);font-size:12px;margin-top:2px;">Agar WhatsApp tab apne aap open nahi hua ho to yahan click karein:</div>
+        </div>
+        <a href="${waLink}" target="_blank" class="btn" style="background:#25D366;color:#fff;font-weight:700;font-size:12.5px;padding:7px 16px;border:none;text-decoration:none;display:inline-flex;align-items:center;gap:6px;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.15);">
+          🚀 Send on WhatsApp →
+        </a>
+      </div>
+      ` : `
+      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-weight:700;color:var(--text);font-size:13px;">💬 WhatsApp Direct Share</div>
+          <div style="color:var(--muted);font-size:12px;">Mobile number enter nahi tha, par aap direct WhatsApp par share kar sakte hain:</div>
+        </div>
+        <a href="${waLink}" target="_blank" class="btn" style="background:#25D366;color:#fff;font-weight:700;font-size:12.5px;padding:7px 14px;border:none;text-decoration:none;display:inline-flex;align-items:center;gap:6px;border-radius:6px;">
+          💬 Open WhatsApp
+        </a>
+      </div>
+      `}
+
+      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <div>
             <b style="font-size:14px;color:var(--text);">${esc(userName)}</b>
@@ -1509,7 +1541,7 @@ Kripya upar diye gaye link par jakar sign in karein aur apna password update kar
           </div>
           <span class="user-role-badge ${roleMeta.badgeCls}">${roleMeta.icon} ${esc(roleMeta.name)}</span>
         </div>
-        <div style="font-size:12px;color:${emailOk ? 'var(--ok, #22c55e)' : 'var(--warn, #f59e0b)'};display:flex;align-items:center;gap:6px;padding-top:6px;border-top:1px dashed var(--line);">
+        <div style="font-size:12px;color:${emailOk ? 'var(--ok, #22c55e)' : 'var(--warn, #f59e0b)'};display:flex;align-items:center;gap:6px;padding-top:6px;border-top:1px dashed var(--line);font-weight:600;">
           ${emailStatus}
         </div>
       </div>
@@ -5385,6 +5417,7 @@ PAGES.settings = () => {
               const rMeta = DEFAULT_ROLE_PERMS[r] || { name: r, icon: '👤', badgeCls: 'role-hr' };
               const isMe = currentUser && currentUser.email && low(currentUser.email) === low(em);
               const emp = (db.employees || []).find(e => (e.email || '').toLowerCase() === low(em));
+              const userPhone = (db.settings.userPhones && db.settings.userPhones[em]) || (emp ? (emp.contact || emp.phone || '') : '');
               
               return `
               <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--panel2);border-radius:8px;border:1px solid var(--line);font-size:13px;gap:12px;flex-wrap:wrap;">
@@ -5395,7 +5428,7 @@ PAGES.settings = () => {
                       <span style="font-weight:700;color:var(--text);font-size:13px;">${esc(em)}</span>
                       ${isMe ? '<span class="badge b-ok" style="font-size:10px;font-weight:700;">You (Super Admin)</span>' : ''}
                     </div>
-                    ${emp ? `<span style="font-size:11.5px;color:var(--muted);">${esc(emp.name)}${emp.department ? ' · ' + esc(emp.department) : ''}${emp.contact || emp.phone ? ' · 📱 ' + esc(emp.contact || emp.phone) : ''}</span>` : ''}
+                    ${emp || userPhone ? `<span style="font-size:11.5px;color:var(--muted);">${emp ? esc(emp.name) : ''}${emp && emp.department ? ' · ' + esc(emp.department) : ''}${userPhone ? ' · 📱 ' + esc(userPhone) : ''}</span>` : ''}
                   </div>
                 </div>
 
@@ -6417,6 +6450,8 @@ function bindGlobal() {
 
         if (!db.settings.userRoleOverrides) db.settings.userRoleOverrides = {};
         db.settings.userRoleOverrides[email] = role;
+        if (!db.settings.userPhones) db.settings.userPhones = {};
+        if (phone) db.settings.userPhones[email] = phone;
         trackUserLogin(email);
         dirtyQueue.settings = true;
         save();
@@ -6433,7 +6468,7 @@ function bindGlobal() {
         const role = (db.settings.userRoleOverrides && db.settings.userRoleOverrides[email]) || (email.includes('hr') ? 'hr' : 'it_admin');
         const emp = (db.employees || []).find(e => (e.email || '').toLowerCase() === email);
         const name = emp ? emp.name : email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        const phone = emp ? (emp.contact || emp.phone || '') : '';
+        const phone = (db.settings.userPhones && db.settings.userPhones[email]) || (emp ? (emp.contact || emp.phone || '') : '');
         const tempPass = 'TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2);
         showUserInviteModal(email, role, phone, name, tempPass);
         break;
@@ -6443,6 +6478,9 @@ function bindGlobal() {
         if (!email) return;
         if (db.settings.userRoleOverrides) {
           delete db.settings.userRoleOverrides[email];
+        }
+        if (db.settings.userPhones) {
+          delete db.settings.userPhones[email];
         }
         dirtyQueue.settings = true;
         save();
@@ -6846,6 +6884,12 @@ function cleanCorruptedDataLocations() {
   if (!db.settings.userRoleOverrides || typeof db.settings.userRoleOverrides !== 'object') {
     db.settings.userRoleOverrides = {};
   }
+  if (!db.settings.userPhones || typeof db.settings.userPhones !== 'object') {
+    db.settings.userPhones = {};
+  }
+  if (!db.settings.userPhones['waseemir04@gmail.com']) {
+    db.settings.userPhones['waseemir04@gmail.com'] = '8881709248';
+  }
   if (!Array.isArray(db.settings.knownUsers)) {
     db.settings.knownUsers = [];
   }
@@ -6889,6 +6933,12 @@ async function init() {
 
   try { const d = await IDB.get('db'); if (d) db = migrate(d); }
   catch (e) { toast('Browser storage not available: ' + e.message, 'err'); }
+
+  if (!db.settings) db.settings = {};
+  if (!db.settings.userPhones) db.settings.userPhones = {};
+  if (!db.settings.userPhones['waseemir04@gmail.com']) {
+    db.settings.userPhones['waseemir04@gmail.com'] = '8881709248';
+  }
 
   // Ensure Mo Vaseem is ALWAYS restored as IT Admin in memory and in settings
   if (db.settings?.userRoleOverrides) {
