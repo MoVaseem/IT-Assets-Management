@@ -1419,9 +1419,11 @@ async function showUserInviteModal(email, role, phone = '', name = '', tempPass 
   const origin = window.location.origin + window.location.pathname;
   const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
   const wifiIP = '10.55.2.160';
+  const ghPagesOrigin = 'https://movaseem.github.io/IT-Assets-Management/';
   const wifiOrigin = isLocal ? window.location.href.replace(/127\.0\.0\.1|localhost/, wifiIP).split('#')[0] : origin;
   
-  // For WhatsApp & Mobile sharing, prefer Wi-Fi IP if on localhost
+  // For WhatsApp, Mobile devices & Email redirectTo:
+  // If local, prefer Wi-Fi IP so other devices on same network can reach it
   const effectiveOrigin = isLocal ? wifiOrigin : origin;
 
   const password = tempPass || ('TJ@' + Math.floor(1000 + Math.random() * 9000) + '#' + new Date().getFullYear().toString().slice(-2));
@@ -1488,7 +1490,7 @@ Kripya upar diye gaye link par jakar sign in karein aur apna password update kar
 
     // 2. Dispatch password setup & recovery email
     try {
-      const { error } = await isolatedClient.auth.resetPasswordForEmail(email, { redirectTo: origin });
+      const { error } = await isolatedClient.auth.resetPasswordForEmail(email, { redirectTo: effectiveOrigin });
       if (error) {
         if (error.message && error.message.toLowerCase().includes('rate limit')) {
           emailStatus = '⚠️ Supabase email rate limit reached (Free tier: 3 emails/hr). Temporary login credentials WhatsApp se bheje ja sakte hain.';
@@ -1604,7 +1606,7 @@ Kripya upar diye gaye link par jakar sign in karein aur apna password update kar
           resendBtn.textContent = 'Sending...';
           const iso = getIsolatedAuthClient();
           const client = iso || sbClient;
-          const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: origin });
+          const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: effectiveOrigin });
           if (error) throw error;
           toast('✅ Invite / Password reset email re-sent!', 'ok');
         } catch (e) {
