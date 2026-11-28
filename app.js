@@ -3435,8 +3435,8 @@ function processTicketModal(ticket) {
         <div><span class="muted">Department:</span> ${esc(ticket.department || '—')}</div>
         <div><span class="muted">Location:</span> ${esc(ticket.location || '—')}</div>
         <div><span class="muted">Work Email:</span> <a href="mailto:${esc(ticket.empEmail)}">${esc(ticket.empEmail)}</a></div>
-        <div><span class="muted">Phone / WA:</span> <b>${esc(ticket.empPhone || '—')}</b> 
-          ${ticket.empPhone ? `<a href="${getWaUrl(ticket.empPhone, employeeWaText)}" target="_blank" class="tagpill" style="margin-left:6px;background:rgba(34,197,94,0.15);color:#4ade80;border-color:rgba(74,222,128,0.3)">💬 WhatsApp</a>` : ''}
+        <div><span class="muted">Phone:</span> <b>${esc(ticket.empPhone || '—')}</b> 
+          ${cleanPhone(ticket.empPhone).length === 10 ? `<a href="${getWaUrl(ticket.empPhone, employeeWaText)}" target="_blank" class="tagpill" style="margin-left:6px;background:rgba(34,197,94,0.15);color:#4ade80;border-color:rgba(74,222,128,0.3)">💬 WhatsApp</a>` : ''}
         </div>
         <div><span class="muted">SLA Deadline:</span> <b>${fmtDate(ticket.slaDueAt)}</b> (${ticket.slaHours}h target)</div>
       </div>
@@ -3528,12 +3528,12 @@ function processTicketModal(ticket) {
     ` : ''}
   `;
 
-  const buttons = [{ label: 'Close', act: 'close' }];
+  const buttons = [];
   if (isIT) {
     buttons.push({
       label: 'Save & Update Ticket ✔',
       cls: 'primary',
-      act: async () => {
+      onClick: async () => {
         const form = $('#tck-process-form');
         if (!form) return true;
         const fd = new FormData(form);
