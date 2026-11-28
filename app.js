@@ -3270,7 +3270,6 @@ function raiseTicketModal(preset = {}) {
   `;
 
   modal('🎫 Raise IT Helpdesk Ticket', body, [
-    { label: 'Cancel', act: 'close' },
     {
       label: 'Submit Ticket 🚀',
       cls: 'primary',
