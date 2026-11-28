@@ -777,6 +777,7 @@ const SUPABASE_CONFIG = {
   anonKey: 'sb_publishable_rvFCvCCIQpiYr7RkHdK8Ew_ImATC2OE'
 };
 
+const INITIAL_AUTH_URL = window.location.href;
 let sbClient = null;
 let sbOnline = false;
 let sbSyncInProgress = false;
@@ -1198,6 +1199,11 @@ function setupAuthListeners() {
 
         const userEmail = (data.user?.email || email).toLowerCase().trim();
 
+        // Ensure cloud settings/employees are loaded before rejecting on a fresh device
+        if (!isUserAuthorized(userEmail) && (!db.employees.length && !(db.settings?.knownUsers?.length))) {
+          await syncFromSupabase().catch(() => {});
+        }
+
         // STRICT SECURITY GATE: Only users authorized / invited by IT Admin can sign in
         if (!isUserAuthorized(userEmail)) {
           console.warn('Unauthorized login attempt:', userEmail);
@@ -1252,9 +1258,12 @@ function setupAuthListeners() {
           currentUser = null;
           updateAuthUI();
         } else if (event === 'PASSWORD_RECOVERY') {
-          showSetNewPasswordModal(session?.user?.email);
+          showSetNewPasswordModal(session?.user?.email, true);
         } else if (event === 'SIGNED_IN' && session && session.user) {
           const userEmail = (session.user.email || '').toLowerCase().trim();
+          if (!isUserAuthorized(userEmail) && (!db.employees.length && !(db.settings?.knownUsers?.length))) {
+            await syncFromSupabase().catch(() => {});
+          }
           if (!isUserAuthorized(userEmail)) {
             try { await sbClient.auth.signOut(); } catch (_) {}
             currentUser = null;
@@ -1278,12 +1287,16 @@ async function checkAuthOnLoad() {
     return;
   }
   const hash = window.location.hash || '';
-  const isRecovery = hash.includes('type=recovery') || hash.includes('type=invite');
+  const isRecovery = hash.includes('type=recovery') || hash.includes('type=invite')
+    || INITIAL_AUTH_URL.includes('type=recovery') || INITIAL_AUTH_URL.includes('type=invite') || INITIAL_AUTH_URL.includes('code=');
 
   try {
     const { data: { session } } = await sbClient.auth.getSession();
     if (session && session.user) {
       const email = (session.user.email || '').toLowerCase().trim();
+      if (!isUserAuthorized(email) && (!db.employees.length && !(db.settings?.knownUsers?.length))) {
+        await syncFromSupabase().catch(() => {});
+      }
       // Guard against unauthorized session
       if (!isUserAuthorized(email)) {
         console.warn('Unauthorized session detected on load, signing out:', email);
@@ -1295,7 +1308,7 @@ async function checkAuthOnLoad() {
       const role = session.user.user_metadata?.role || (db.settings.userRoleOverrides && db.settings.userRoleOverrides[email]) || '';
       currentUser = { id: session.user.id, email, role };
       if (isRecovery) {
-        setTimeout(() => showSetNewPasswordModal(email), 350);
+        setTimeout(() => showSetNewPasswordModal(email, true), 250);
       }
     } else {
       currentUser = null;
@@ -1307,9 +1320,10 @@ async function checkAuthOnLoad() {
   updateAuthUI();
 }
 
-function showSetNewPasswordModal(userEmail = '') {
-  // If the user currently logged in is the primary IT Admin and this is not a recovery link in URL, do not show
-  const isRecoveryHash = window.location.hash.includes('type=recovery') || window.location.hash.includes('type=invite') || window.location.hash.includes('access_token=');
+function showSetNewPasswordModal(userEmail = '', force = false) {
+  if ($('#set-pass-form')) return;
+  const isRecoveryHash = force || window.location.hash.includes('type=recovery') || window.location.hash.includes('type=invite') || window.location.hash.includes('access_token=')
+    || INITIAL_AUTH_URL.includes('type=recovery') || INITIAL_AUTH_URL.includes('type=invite') || INITIAL_AUTH_URL.includes('code=');
   if (isITAdmin() && !isRecoveryHash) {
     return;
   }
@@ -1365,6 +1379,7 @@ function showSetNewPasswordModal(userEmail = '') {
             currentUser = { id: data.user.id, email: data.user.email, role };
             updateAuthUI();
             render();
+            syncFromSupabase().then(() => render()).catch(console.warn);
           }
           if (typeof closeFn === 'function') closeFn();
           rootEl.remove();
@@ -7057,12 +7072,12 @@ function cleanCorruptedDataLocations() {
 // ---------------- start ----------------
 async function init() {
   applyTheme();
+  try { const d = await IDB.get('db'); if (d) db = migrate(d); }
+  catch (e) { toast('Browser storage not available: ' + e.message, 'err'); }
+
   initSupabase();
   setupAuthListeners();
   await checkAuthOnLoad();
-
-  try { const d = await IDB.get('db'); if (d) db = migrate(d); }
-  catch (e) { toast('Browser storage not available: ' + e.message, 'err'); }
 
   if (!db.settings) db.settings = {};
   if (!db.settings.userPhones) db.settings.userPhones = {};
