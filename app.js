@@ -3403,62 +3403,51 @@ function processTicketModal(ticket) {
   const sla = getTicketSLA(ticket);
   const itTeam = getITTeam();
   const asset = ticket.assetTag ? IX.tag.get(normTag(ticket.assetTag)) : null;
-
-  const getWaUrl = (phone, text) => {
-    const clean = String(phone || '').replace(/\D/g, '');
-    const num = clean.startsWith('91') ? clean : (clean.length === 10 ? '91' + clean : clean);
-    return `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+  const fmtDT = iso => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return isNaN(d) ? esc(iso) : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
 
-  const employeeWaText = `Hello ${ticket.empName},\nRegarding your TractorJunction IT Support Ticket #${ticket.id} [${ticket.title}]:`;
-
   const body = `
-    <div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
         <div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <b class="mono" style="font-size:18px;color:var(--accent)">#${esc(ticket.id)}</b>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+            <b class="mono" style="font-size:16px;color:var(--accent)">#${esc(ticket.id)}</b>
             ${badge(ticket.category, 'badge')}
             ${badge(ticket.priority, TICKET_PRIORITY_CLS[ticket.priority])}
             ${badge(ticket.status || 'Open', TICKET_STATUS_CLS[ticket.status || 'Open'])}
           </div>
-          <h3 style="margin:6px 0 2px;font-size:16px">${esc(ticket.title)}</h3>
-          <span class="muted" style="font-size:12px">Raised ${ago(ticket.createdAt)} (${fmtDate(ticket.createdAt)})</span>
+          <h3 style="margin:6px 0 2px;font-size:15px">${esc(ticket.title)}</h3>
+          <span class="muted" style="font-size:12px">Raised ${ago(ticket.createdAt)} · ${fmtDT(ticket.createdAt)}</span>
         </div>
-        <div>
-          <span class="${sla.badgeCls}" style="font-size:12px;padding:5px 12px" title="${esc(sla.detail)}">${sla.label}</span>
-        </div>
+        <span class="${sla.badgeCls}" style="font-size:11.5px;padding:4px 10px" title="${esc(sla.detail)}">${sla.label}</span>
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;font-size:12px;background:var(--panel);padding:12px;border-radius:8px;border:1px solid var(--line)">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px 12px;font-size:12px;background:var(--panel);padding:10px 12px;border-radius:8px;border:1px solid var(--line)">
         <div><span class="muted">Requester:</span> <b>${esc(ticket.empName)}</b> ${ticket.empCode ? `(${esc(ticket.empCode)})` : ''}</div>
-        <div><span class="muted">Department:</span> ${esc(ticket.department || '—')}</div>
-        <div><span class="muted">Location:</span> ${esc(ticket.location || '—')}</div>
-        <div><span class="muted">Work Email:</span> <a href="mailto:${esc(ticket.empEmail)}">${esc(ticket.empEmail)}</a></div>
-        <div><span class="muted">Phone:</span> <b>${esc(ticket.empPhone || '—')}</b> 
-          ${cleanPhone(ticket.empPhone).length === 10 ? `<a href="${getWaUrl(ticket.empPhone, employeeWaText)}" target="_blank" class="tagpill" style="margin-left:6px;background:rgba(34,197,94,0.15);color:#4ade80;border-color:rgba(74,222,128,0.3)">💬 WhatsApp</a>` : ''}
-        </div>
-        <div><span class="muted">SLA Deadline:</span> <b>${fmtDate(ticket.slaDueAt)}</b> (${ticket.slaHours}h target)</div>
+        <div><span class="muted">Email:</span> <a href="mailto:${esc(ticket.empEmail)}">${esc(ticket.empEmail)}</a></div>
+        <div><span class="muted">Phone:</span> <b>${esc(ticket.empPhone || '—')}</b></div>
+        <div><span class="muted">Dept / Loc:</span> ${esc([ticket.department, ticket.location].filter(Boolean).join(' · ') || '—')}</div>
+        <div><span class="muted">SLA Due:</span> <b>${fmtDT(ticket.slaDueAt)}</b> (${ticket.slaHours}h)</div>
       </div>
 
       ${ticket.assetTag ? `
         <div style="margin-top:10px;background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.25);border-radius:8px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <div>
-            <span style="font-size:12px;color:var(--muted)">Assigned Hardware:</span>
-            <div style="font-weight:600;font-size:13px;margin-top:2px">
-              💻 ${esc(ticket.assetTag)} ${asset ? `· ${esc(asset.type)} ${esc(asset.make || '')} ${esc(asset.model || '')} (S/N: ${esc(asset.serialNo || '—')})` : esc(ticket.assetDetails || '')}
-            </div>
+          <div style="font-size:12.5px">
+            <span class="muted">Hardware:</span> <b>💻 ${esc(ticket.assetTag)}</b> ${asset ? `· ${esc(asset.type)} ${esc(asset.make || '')} ${esc(asset.model || '')}` : esc(ticket.assetDetails || '')}
           </div>
-          ${asset ? `<button type="button" class="btn sm" data-act="open-asset" data-id="${asset.id}">Inspect Asset Specs</button>` : ''}
+          ${asset ? `<button type="button" class="btn sm" data-act="open-asset" data-id="${asset.id}">Inspect Asset</button>` : ''}
         </div>
       ` : ''}
 
-      <div style="margin-top:12px;font-size:13px;line-height:1.5;background:var(--panel);padding:12px;border-radius:8px;border:1px solid var(--line)">
-        <b style="color:var(--muted);display:block;font-size:11px;text-transform:uppercase;margin-bottom:4px">Problem Description:</b>
+      <div style="margin-top:10px;font-size:13px;line-height:1.5;background:var(--panel);padding:12px;border-radius:8px;border:1px solid var(--line)">
+        <b style="color:var(--muted);display:block;font-size:11px;text-transform:uppercase;margin-bottom:4px">Problem Description</b>
         ${esc(ticket.description)}
         ${Array.isArray(ticket.attachments) && ticket.attachments.length ? `
           <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
-            <b style="color:var(--muted);display:block;font-size:11px;text-transform:uppercase;margin-bottom:6px">Attached Photos (${ticket.attachments.length}):</b>
+            <b style="color:var(--muted);display:block;font-size:11px;text-transform:uppercase;margin-bottom:6px">Attached Photos (${ticket.attachments.length})</b>
             <div class="tck-photo-grid" style="margin-top:0;">
               ${ticket.attachments.map((att, i) => `
                 <div class="tck-photo-thumb" data-view-photo="${i}" title="Click to view full photo">
@@ -3468,18 +3457,16 @@ function processTicketModal(ticket) {
           </div>` : ''}
       </div>
 
-      ${ticket.resolutionNotes ? `
-        <div style="margin-top:12px;background:rgba(34,197,94,0.08);border:1px solid rgba(74,222,128,0.3);border-radius:8px;padding:12px;">
-          <b style="color:#4ade80;font-size:12px;display:flex;align-items:center;gap:6px">
-            ✅ Technical Resolution by ${esc(ticket.resolvedBy || 'IT Engineer')} ${ticket.resolvedAt ? `(${ago(ticket.resolvedAt)})` : ''}:
-          </b>
-          <div style="font-size:13px;margin-top:4px;color:var(--text)">${esc(ticket.resolutionNotes)}</div>
+      ${ticket.resolutionNotes && !isIT ? `
+        <div style="margin-top:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(74,222,128,0.3);border-radius:8px;padding:10px 12px;">
+          <b style="color:#4ade80;font-size:12px">✅ Resolution (${esc(ticket.resolvedBy || 'IT Team')}):</b>
+          <div style="font-size:13px;margin-top:4px">${esc(ticket.resolutionNotes)}</div>
         </div>
       ` : ''}
 
       ${Array.isArray(ticket.activity) && ticket.activity.length ? `
         <div class="ticket-activity-box">
-          <b style="font-size:11px;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px">Audit &amp; Action Log</b>
+          <b style="font-size:11px;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:4px">Activity Log</b>
           ${ticket.activity.map(a => `
             <div class="ticket-act-row">
               <span class="ticket-act-time">${ago(a.at)}</span>
@@ -3492,10 +3479,6 @@ function processTicketModal(ticket) {
 
     ${isIT ? `
       <form id="tck-process-form" class="form-grid">
-        <div style="grid-column:1 / -1;margin-bottom:4px">
-          <h4 style="margin:0;font-size:14px;color:var(--text)">🛠️ IT Management &amp; Assignment</h4>
-        </div>
-
         <label><b>Assign IT Engineer</b>
           <select name="assignedTo" id="tck-assignee-select">
             <option value="Unassigned">⚠️ Unassigned</option>
@@ -3512,18 +3495,9 @@ function processTicketModal(ticket) {
           </select>
         </label>
 
-        <label style="grid-column:1 / -1"><b>Resolution Notes (Work Performed / Root Cause)</b>
-          <textarea name="resolutionNotes" rows="3" placeholder="e.g. Replaced RAM module, tested Windows memory diagnostics, boots smoothly. Verified with employee.">${esc(ticket.resolutionNotes || '')}</textarea>
+        <label style="grid-column:1 / -1"><b>Resolution Notes</b>
+          <textarea name="resolutionNotes" rows="2" placeholder="Work performed / resolution details...">${esc(ticket.resolutionNotes || '')}</textarea>
         </label>
-
-        <div style="grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:4px">
-          <button type="button" class="btn" id="btn-wa-it-delegate" style="font-size:12px">
-            📲 WhatsApp Assigned Engineer
-          </button>
-          <button type="button" class="btn ok" id="btn-wa-emp-resolve" style="font-size:12px">
-            💬 1-Click WhatsApp Resolution to Employee
-          </button>
-        </div>
       </form>
     ` : ''}
   `;
@@ -3544,6 +3518,7 @@ function processTicketModal(ticket) {
 
         const oldAssignee = ticket.assignedTo;
         const oldStatus = ticket.status;
+        const oldNotes = ticket.resolutionNotes || '';
 
         ticket.assignedTo = newAssignee;
         ticket.status = newStatus;
@@ -3572,7 +3547,7 @@ function processTicketModal(ticket) {
           });
         }
 
-        if (newNotes && newNotes !== ticket.resolutionNotes) {
+        if (newNotes && newNotes !== oldNotes) {
           ticket.activity.unshift({
             at: now.toISOString(),
             by: currentUser?.email?.split('@')[0] || 'IT Engineer',
@@ -3599,32 +3574,6 @@ function processTicketModal(ticket) {
       modal(`📷 ${att.name || 'Issue Photo'}`, `<div style="text-align:center;"><img src="${att.dataUrl}" style="max-width:100%;max-height:70vh;border-radius:10px;border:1px solid var(--line);"></div>`, [], 'md');
     };
   });
-
-  setTimeout(() => {
-    const btnWaDelegate = $('#btn-wa-it-delegate');
-    if (btnWaDelegate) {
-      btnWaDelegate.onclick = () => {
-        const assignee = $('#tck-assignee-select')?.value || ticket.assignedTo;
-        const text = `TractorJunction IT Helpdesk\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nHello ${assignee},\nTicket #${ticket.id} [${ticket.priority} - ${ticket.slaHours}h SLA] has been assigned to you:\n👤 Requester: ${ticket.empName} (${ticket.department})\n💻 Hardware : ${ticket.assetTag || 'General'}\n⚠️ Issue    : ${ticket.title}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nPlease inspect and resolve within SLA.`;
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-      };
-    }
-
-    const btnWaEmp = $('#btn-wa-emp-resolve');
-    if (btnWaEmp) {
-      btnWaEmp.onclick = () => {
-        const status = $('#tck-status-select')?.value || ticket.status;
-        const notes = $('textarea[name="resolutionNotes"]')?.value || ticket.resolutionNotes || 'Resolved successfully.';
-        const text = `TractorJunction IT Helpdesk\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nHello ${ticket.empName},\nYour IT Support Ticket #${ticket.id} status is now: ${status} ✅\n\nIssue   : ${ticket.title}\nEngineer: ${ticket.assignedTo || 'IT Team'}\nNotes   : ${notes}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nThank you for contacting TractorJunction IT Support!`;
-        const phone = ticket.empPhone;
-        if (phone) {
-          window.open(getWaUrl(phone, text), '_blank');
-        } else {
-          window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-        }
-      };
-    }
-  }, 50);
 }
 
 function exportTicketsCSV() {
