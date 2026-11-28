@@ -203,7 +203,7 @@ function getActiveFields(baseFields, target) {
 
 const EMP_FIELDS = [
   { k: 'empCode', l: 'Emp Code' }, { k: 'name', l: 'Full Name', req: true }, { k: 'email', l: 'Email', t: 'email' },
-  { k: 'phone', l: 'Phone' }, { k: 'designation', l: 'Designation', list: 'designation' }, 
+  { k: 'phone', l: 'Mobile Number' }, { k: 'designation', l: 'Designation', list: 'designation' }, 
   { k: 'department', l: 'Department', t: 'select', opts: () => getDepartments() },
   { k: 'location', l: 'Location', t: 'select', opts: () => getLocations() }, 
   { k: 'company', l: 'Company / Payroll', t: 'select', opts: () => getCompanies() }, 
@@ -830,6 +830,8 @@ function getUserRole() {
   const email = (currentUser.email || '').toLowerCase().trim();
 
   // 1. PRIMARY SUPER ADMIN / ENGINEER: Mo Vaseem is ALWAYS it_admin! (Can NEVER be demoted)
+  const phone = cleanPhone(currentUser?.phone || '');
+  if (phone === '8881709248') return 'it_admin';
   const eng = (db.settings?.engineer || '').toLowerCase();
   if (
     email.includes('vaseem') || 
@@ -856,6 +858,7 @@ function getUserRole() {
 }
 
 function isUserAuthorized(email) {
+  if (currentUser && currentUser.phone && findUserByMobile(currentUser.phone)) return true;
   if (!email) return false;
   const e = email.toLowerCase().trim();
   const eng = (db.settings?.engineer || '').toLowerCase();
@@ -1021,19 +1024,120 @@ function applyRoleNavRestrictions() {
   }
 }
 
+// ---------------- Mobile & User Resolution Helpers ----------------
+
+function cleanPhone(phone) {
+  if (!phone) return '';
+  const digits = String(phone).replace(/\D/g, '');
+  if (digits.length === 10) return digits;
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}
+
+function findUserByMobile(phoneInput) {
+  const p = cleanPhone(phoneInput);
+  if (!p || p.length !== 10) return null;
+
+  // 1. Primary IT Admin (Mo Vaseem) - by phone
+  const adminPhones = ['8881709248'];
+  if (db.settings && db.settings.engineerPhone) adminPhones.push(cleanPhone(db.settings.engineerPhone));
+  if (db.settings && db.settings.userPhones) {
+    Object.keys(db.settings.userPhones).forEach(em => {
+      if (em.toLowerCase().includes('vaseem') || em === 'waseemir04@gmail.com') {
+        adminPhones.push(cleanPhone(db.settings.userPhones[em]));
+      }
+    });
+  }
+  if (adminPhones.includes(p)) {
+    return {
+      id: 'admin-vaseem',
+      name: 'Mo Vaseem',
+      email: 'movaseem@tractorjunction.com',
+      phone: p,
+      role: 'it_admin'
+    };
+  }
+
+  // 2. Check userPhones mapping in db.settings
+  if (db.settings && db.settings.userPhones) {
+    for (const [email, userPhone] of Object.entries(db.settings.userPhones)) {
+      if (cleanPhone(userPhone) === p) {
+        const em = email.toLowerCase().trim();
+        const role = (db.settings.userRoleOverrides && db.settings.userRoleOverrides[em]) || (em.includes('hr') ? 'hr' : 'employee');
+        const emp = (db.employees || []).find(e => (e.email || '').toLowerCase().trim() === em);
+        return {
+          id: emp?.id || ('user-' + p),
+          name: emp?.name || email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          email: em,
+          phone: p,
+          role: role,
+          empCode: emp?.empCode || ''
+        };
+      }
+    }
+  }
+
+  // 3. Check employees list (e.phone, e.contact, e.mobile)
+  if (Array.isArray(db.employees)) {
+    const emp = db.employees.find(e => {
+      const ph = cleanPhone(e.phone || e.contact || e.mobile);
+      return ph === p;
+    });
+    if (emp) {
+      const em = (emp.email || '').toLowerCase().trim() || `${emp.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@tractorjunction.com`;
+      const role = (db.settings?.userRoleOverrides && db.settings.userRoleOverrides[em]) || (em.includes('hr') ? 'hr' : (emp.role || 'employee'));
+      return {
+        id: emp.id || ('emp-' + (emp.empCode || p)),
+        name: emp.name || 'Employee',
+        email: em,
+        phone: p,
+        role: role,
+        empCode: emp.empCode || ''
+      };
+    }
+  }
+
+  return null;
+}
+
+function getPortalRedirectUrl() {
+  const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:';
+  return isLocal ? 'https://movaseem.github.io/IT-Assets-Management/' : window.location.href.split('#')[0];
+}
+
 function setupAuthListeners() {
   const form = $('#auth-form');
   const submitBtn = $('#auth-submit-btn');
   const errBox = $('#auth-error');
   const succBox = $('#auth-success');
 
+  const togglePassBtn = $('#toggle-auth-pass');
+  if (togglePassBtn) {
+    togglePassBtn.onclick = () => {
+      const inp = $('#auth-password');
+      if (!inp) return;
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      togglePassBtn.textContent = show ? '🙈' : '👁️';
+      togglePassBtn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    };
+  }
+
   const forgotBtn = $('#btn-forgot-password');
   if (forgotBtn) {
     forgotBtn.onclick = async () => {
-      const email = $('#auth-email')?.value.trim();
+      const raw = $('#auth-email')?.value.trim() || '';
+      let email = raw;
+      const cleanNum = cleanPhone(raw);
+      if (cleanNum && cleanNum.length === 10) {
+        const found = findUserByMobile(cleanNum);
+        if (found && found.email) email = found.email;
+        else if (cleanNum === '8881709248') email = 'movaseem@tractorjunction.com';
+      }
       if (!email || !EMAIL_RE.test(email)) {
         if (errBox) {
-          errBox.textContent = 'Kripya apna valid Work Email upar enter karein, fir "Forgot password" par click karein.';
+          errBox.textContent = 'Kripya apna valid Work Email ya registered Mobile Number upar enter karein, fir "Forgot password" par click karein.';
           errBox.style.display = 'block';
         }
         return;
@@ -1042,7 +1146,7 @@ function setupAuthListeners() {
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sending link...'; }
         if (!sbClient) initSupabase();
         const { error } = await sbClient.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.href.split('#')[0]
+          redirectTo: getPortalRedirectUrl()
         });
         if (error) throw error;
         if (succBox) {
@@ -1065,9 +1169,20 @@ function setupAuthListeners() {
       e.preventDefault();
       if (errBox) errBox.style.display = 'none';
       if (succBox) succBox.style.display = 'none';
-      const email = $('#auth-email')?.value.trim();
+      const rawInput = $('#auth-email')?.value.trim() || '';
       const password = $('#auth-password')?.value;
-      if (!email || !password) return;
+      if (!rawInput || !password) return;
+
+      let email = rawInput;
+      const cleanNum = cleanPhone(rawInput);
+      if (cleanNum && cleanNum.length === 10) {
+        const found = findUserByMobile(cleanNum);
+        if (found && found.email) {
+          email = found.email;
+        } else if (cleanNum === '8881709248') {
+          email = 'movaseem@tractorjunction.com';
+        }
+      }
 
       if (submitBtn) {
         submitBtn.disabled = true;
@@ -1116,7 +1231,7 @@ function setupAuthListeners() {
           if (msg.includes('Email not confirmed')) {
             msg = 'Email confirm nahi hua hai. Supabase Dashboard ➔ Users me jakar is email ko "Confirm User" karein ya Confirm email setting OFF karein.';
           } else if (msg.includes('Invalid login credentials')) {
-            msg = 'Email ya Password galat hai. Kripya check karke dobara try karein, ya IT Admin se invite link lein.';
+            msg = 'Email/Mobile ya Password galat hai. Kripya check karke dobara try karein, ya IT Admin se invite link lein.';
           }
           errBox.textContent = msg;
           errBox.style.display = 'block';
@@ -1156,6 +1271,7 @@ function setupAuthListeners() {
 }
 
 async function checkAuthOnLoad() {
+  localStorage.removeItem('tj_mobile_auth');
   if (!sbClient) initSupabase();
   if (!sbClient) {
     updateAuthUI();
@@ -2505,7 +2621,8 @@ function tableHTML(pg, cols, rows, rowAttr) {
       </div>
     </div>`;
 
-  return `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="empty">No records found</td></tr>`}</tbody></table></div>
+  const emptyMsg = sbSyncInProgress ? '⏳ Loading records from cloud…' : 'No records found';
+  return `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="empty">${emptyMsg}</td></tr>`}</tbody></table></div>
     ${paginationBar}`;
 }
 function sortRows(pg, rows, cols) {
@@ -6240,6 +6357,9 @@ function bindGlobal() {
         break;
       }
       case 'logout': {
+        localStorage.removeItem('tj_mobile_auth');
+        try { await IDB.del('db'); } catch (_) {}
+        db = emptyDb();
         if (sbClient) {
           try { await sbClient.auth.signOut(); } catch (_) {}
         }
@@ -6250,7 +6370,14 @@ function bindGlobal() {
       }
       case 'menu': { const o = $('#sidebar').classList.toggle('open'); $('#side-backdrop').hidden = !o; break; }
       case 'menu-close': closeSide(); break;
-      case 'theme': { const cur = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; db.settings.theme = cur; applyTheme(); save(); break; }
+      case 'theme': {
+        const cur = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        db.settings.theme = cur;
+        localStorage.setItem('tj_theme', cur);
+        applyTheme();
+        save();
+        break;
+      }
       case 'nav-group': navGroups[d.g] = !navGroups[d.g]; renderNavSub(d.g.split('.')[0]); break;
       case 'nav': if (el.classList.contains('subitem') || el.classList.contains('brand')) closeSide(); go(!canAccessPage(d.page) ? 'employees' : d.page, d.f ? JSON.parse(d.f) : null); break;
       case 'raise-ticket': raiseTicketModal(); break;
@@ -6863,8 +6990,10 @@ function bindGlobal() {
   });
 }
 function applyTheme() {
-  const t = db.settings.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const saved = localStorage.getItem('tj_theme');
+  const t = db.settings.theme || saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   document.documentElement.dataset.theme = t;
+  if (db.settings.theme) localStorage.setItem('tj_theme', db.settings.theme);
 }
 
 function cleanCorruptedDataLocations() {
@@ -6886,6 +7015,9 @@ function cleanCorruptedDataLocations() {
   }
   if (!db.settings.userPhones['waseemir04@gmail.com']) {
     db.settings.userPhones['waseemir04@gmail.com'] = '8881709248';
+  }
+  if (!db.settings.smsApiKey) {
+    db.settings.smsApiKey = '';
   }
   if (!Array.isArray(db.settings.knownUsers)) {
     db.settings.knownUsers = [];
@@ -6924,6 +7056,7 @@ function cleanCorruptedDataLocations() {
 
 // ---------------- start ----------------
 async function init() {
+  applyTheme();
   initSupabase();
   setupAuthListeners();
   await checkAuthOnLoad();
@@ -6936,7 +7069,6 @@ async function init() {
   if (!db.settings.userPhones['waseemir04@gmail.com']) {
     db.settings.userPhones['waseemir04@gmail.com'] = '8881709248';
   }
-
   // Ensure Mo Vaseem is ALWAYS restored as IT Admin in memory and in settings
   if (db.settings?.userRoleOverrides) {
     let cleaned = false;
@@ -6952,7 +7084,11 @@ async function init() {
     }
   }
 
-  if (currentUser && (currentUser.email.toLowerCase().includes('vaseem') || currentUser.email === 'movaseem@tractorjunction.com')) {
+  if (currentUser && currentUser.phone) {
+    const refreshed = findUserByMobile(currentUser.phone);
+    if (refreshed) currentUser = refreshed;
+  }
+  if (currentUser && ((currentUser.email && (currentUser.email.toLowerCase().includes('vaseem') || currentUser.email === 'movaseem@tractorjunction.com')) || cleanPhone(currentUser.phone) === '8881709248')) {
     currentUser.role = 'it_admin';
   }
   updateAuthUI();
@@ -6975,11 +7111,12 @@ async function init() {
   reindex();
   await snapshotToday();
   try { fileHandle = (await IDB.get('fileHandle')) || null; if (fileHandle) fileOk = (await fileHandle.queryPermission({ mode: 'readwrite' })) === 'granted'; } catch { fileHandle = null; }
-  applyTheme(); bindGlobal(); render();
+  applyTheme(); bindGlobal();
   setSaveStatus(db.savedAt ? `Last saved ${new Date(db.savedAt).toLocaleString()}` : 'No data saved yet');
 
   if (sbClient && currentUser) {
     syncFromSupabase();
   }
+  render();
 }
 init();

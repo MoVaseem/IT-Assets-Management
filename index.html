@@ -19,7 +19,7 @@
         <p class="auth-sub">IT Assets &amp; Employee Management System</p>
       </div>
 
-      <div class="auth-notice" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:12px 14px;margin-bottom:16px;text-align:left;display:flex;align-items:flex-start;gap:10px;">
+      <div class="auth-notice" style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;text-align:left;display:flex;align-items:flex-start;gap:10px;">
         <span style="font-size:18px;line-height:1.2;">🔒</span>
         <div style="font-size:12px;color:var(--text);line-height:1.45;">
           <b>Authorized Company Access Only</b><br>
@@ -29,13 +29,16 @@
 
       <form id="auth-form" autocomplete="on">
         <div class="auth-field">
-          <label>Work Email</label>
-          <input type="email" id="auth-email" placeholder="name@tractorjunction.com" required autocomplete="email">
+          <label>Work Email or Mobile Number</label>
+          <input type="text" id="auth-email" placeholder="name@tractorjunction.com or 10-digit mobile" required autocomplete="username">
         </div>
 
         <div class="auth-field" id="pass-field-box">
           <label>Password</label>
-          <input type="password" id="auth-password" placeholder="••••••••" required autocomplete="current-password">
+          <div class="pass-wrap">
+            <input type="password" id="auth-password" placeholder="••••••••" required autocomplete="current-password">
+            <button type="button" id="toggle-auth-pass" class="pass-toggle" aria-label="Show password" title="Show / hide password">👁️</button>
+          </div>
         </div>
 
         <div id="forgot-pass-box" style="display:flex;justify-content:space-between;align-items:center;margin-top:-6px;margin-bottom:14px;">
