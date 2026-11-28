@@ -1604,16 +1604,20 @@ Kripya upar diye gaye link par jakar sign in karein aur apna password update kar
 
   let emailStatus = '⏳ Sending password setup email via Supabase...';
   let emailOk = false;
+  let userAlreadyExists = false;
 
   const isolatedClient = getIsolatedAuthClient();
   if (isolatedClient) {
     // 1. Create user in Supabase Auth using ISOLATED client (never touches Admin session!)
     try {
-      await isolatedClient.auth.signUp({
+      const { data: suData, error: suErr } = await isolatedClient.auth.signUp({
         email,
         password,
         options: { data: { role }, emailRedirectTo: effectiveOrigin }
       });
+      if ((suErr && /already registered/i.test(suErr.message)) || (suData?.user && Array.isArray(suData.user.identities) && suData.user.identities.length === 0)) {
+        userAlreadyExists = true;
+      }
     } catch (_) {}
 
     // 2. Dispatch password setup & recovery email
@@ -1621,13 +1625,16 @@ Kripya upar diye gaye link par jakar sign in karein aur apna password update kar
       const { error } = await isolatedClient.auth.resetPasswordForEmail(email, { redirectTo: effectiveOrigin });
       if (error) {
         if (error.message && error.message.toLowerCase().includes('rate limit')) {
-          emailStatus = '⚠️ Supabase email rate limit reached (Free tier: 3 emails/hr). Temporary login credentials WhatsApp se bheje ja sakte hain.';
+          emailStatus = '⚠️ Supabase email rate limit reached. Thodi der baad "Re-send Email" ya "Forgot password" use karein.';
         } else {
           emailStatus = `⚠️ Supabase email status: ${error.message}`;
         }
       } else {
         emailOk = true;
         emailStatus = `✅ Password setup & recovery email dispatched to ${email}! (Kripya Spam / Junk folder bhi check karein)`;
+      }
+      if (userAlreadyExists) {
+        emailStatus += '<br><span style="color:var(--warn);font-size:11.5px;">ℹ️ Note: Ye account pehle se Supabase me registered hai, isliye upar wala naya Temporary Password kaam nahi karega — user ko email reset link ya purana password use karna hoga.</span>';
       }
     } catch (e) {
       emailStatus = `⚠️ ${e.message}`;
