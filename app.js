@@ -1045,7 +1045,7 @@ function findUserByMobile(phoneInput) {
   if (db.settings && db.settings.engineerPhone) adminPhones.push(cleanPhone(db.settings.engineerPhone));
   if (db.settings && db.settings.userPhones) {
     Object.keys(db.settings.userPhones).forEach(em => {
-      if (em.toLowerCase().includes('vaseem') || em === 'waseemir04@gmail.com') {
+      if (em.toLowerCase().includes('vaseem')) {
         adminPhones.push(cleanPhone(db.settings.userPhones[em]));
       }
     });
@@ -6628,6 +6628,9 @@ function bindGlobal() {
         if (db.settings.userPhones) {
           delete db.settings.userPhones[email];
         }
+        if (Array.isArray(db.settings.knownUsers)) {
+          db.settings.knownUsers = db.settings.knownUsers.filter(u => (u || '').toLowerCase().trim() !== email);
+        }
         dirtyQueue.settings = true;
         save();
         updateAuthUI();
@@ -7035,9 +7038,6 @@ function cleanCorruptedDataLocations() {
   if (!db.settings.userPhones || typeof db.settings.userPhones !== 'object') {
     db.settings.userPhones = {};
   }
-  if (!db.settings.userPhones['waseemir04@gmail.com']) {
-    db.settings.userPhones['waseemir04@gmail.com'] = '8881709248';
-  }
   if (!db.settings.smsApiKey) {
     db.settings.smsApiKey = '';
   }
@@ -7088,9 +7088,6 @@ async function init() {
 
   if (!db.settings) db.settings = {};
   if (!db.settings.userPhones) db.settings.userPhones = {};
-  if (!db.settings.userPhones['waseemir04@gmail.com']) {
-    db.settings.userPhones['waseemir04@gmail.com'] = '8881709248';
-  }
   // Ensure Mo Vaseem is ALWAYS restored as IT Admin in memory and in settings
   if (db.settings?.userRoleOverrides) {
     let cleaned = false;
