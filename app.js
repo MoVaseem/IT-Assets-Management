@@ -1597,7 +1597,7 @@ Kripya upar diye gaye link par jakar sign in karein aur apna password update kar
       await isolatedClient.auth.signUp({
         email,
         password,
-        options: { data: { role } }
+        options: { data: { role }, emailRedirectTo: effectiveOrigin }
       });
     } catch (_) {}
 
