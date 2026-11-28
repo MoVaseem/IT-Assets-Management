@@ -3184,6 +3184,7 @@ function raiseTicketModal(preset = {}) {
   };
 
   const initialAssets = getAssetsForEmp(defaultEmp);
+  const attachments = [];
 
   const body = `
     <form id="raise-ticket-form" class="form-grid">
@@ -3259,6 +3260,18 @@ function raiseTicketModal(preset = {}) {
         <textarea name="description" rows="4" required placeholder="Please describe what happens, any error message shown, and when the issue started…"></textarea>
       </label>
 
+      <div class="tck-photo-box">
+        <b style="font-size:12px;">📷 Attach Photos / Screenshots (Optional, Max 4)</b>
+        <div class="tck-photo-actions">
+          <button type="button" class="btn sm" id="tck-btn-upload">📁 Upload Photo</button>
+          <button type="button" class="btn sm" id="tck-btn-camera">📷 Take Photo (Camera)</button>
+          <span class="muted" style="font-size:11px;">Laptop error screen ya damage ki photo lagayein</span>
+          <input type="file" id="tck-file-upload" accept="image/*" multiple hidden>
+          <input type="file" id="tck-file-camera" accept="image/*" capture="environment" hidden>
+        </div>
+        <div id="tck-photo-previews" class="tck-photo-grid" style="display:none;"></div>
+      </div>
+
       <div style="grid-column:1 / -1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;font-size:12px;">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:16px">⏱️</span>
@@ -3273,7 +3286,7 @@ function raiseTicketModal(preset = {}) {
     {
       label: 'Submit Ticket 🚀',
       cls: 'primary',
-      act: async () => {
+      onClick: async () => {
         const form = $('#raise-ticket-form');
         if (!form || !form.reportValidity()) return false;
         const fd = new FormData(form);
@@ -3310,6 +3323,7 @@ function raiseTicketModal(preset = {}) {
           assetDetails,
           title: norm(fd.get('title')),
           description: norm(fd.get('description')),
+          attachments: attachments.slice(),
           status: 'Open',
           assignedTo: 'Unassigned',
           assignedAt: '',
@@ -3344,6 +3358,43 @@ function raiseTicketModal(preset = {}) {
         gText.textContent = `Based on Priority [${p}], IT Team will resolve this within ${h} Hours.`;
       });
     }
+
+    const prevBox = $('#tck-photo-previews');
+    const upInp = $('#tck-file-upload');
+    const camInp = $('#tck-file-camera');
+    const renderPreviews = () => {
+      if (!prevBox) return;
+      if (!attachments.length) { prevBox.style.display = 'none'; prevBox.innerHTML = ''; return; }
+      prevBox.style.display = 'flex';
+      prevBox.innerHTML = attachments.map((att, i) => `
+        <div class="tck-photo-thumb" title="${esc(att.name)}">
+          <img src="${att.dataUrl}" alt="Issue photo ${i + 1}">
+          <button type="button" class="tck-photo-rm" data-rm-photo="${i}" title="Remove photo">✕</button>
+        </div>`).join('');
+      prevBox.querySelectorAll('[data-rm-photo]').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          attachments.splice(+btn.dataset.rmPhoto, 1);
+          renderPreviews();
+        };
+      });
+    };
+    const handleFiles = async (files) => {
+      for (const file of [...(files || [])]) {
+        if (attachments.length >= 4) { toast('Maximum 4 photos attach kar sakte hain', 'warn'); break; }
+        try {
+          const dataUrl = await readImageFile(file, 1024);
+          attachments.push({ name: file.name || 'photo.png', dataUrl });
+        } catch (err) {
+          toast(err.message || 'Image read failed', 'err');
+        }
+      }
+      renderPreviews();
+    };
+    $('#tck-btn-upload')?.addEventListener('click', () => upInp?.click());
+    $('#tck-btn-camera')?.addEventListener('click', () => camInp?.click());
+    upInp?.addEventListener('change', async () => { await handleFiles(upInp.files); upInp.value = ''; });
+    camInp?.addEventListener('change', async () => { await handleFiles(camInp.files); camInp.value = ''; });
   }, 50);
 }
 
@@ -3405,6 +3456,16 @@ function processTicketModal(ticket) {
       <div style="margin-top:12px;font-size:13px;line-height:1.5;background:var(--panel);padding:12px;border-radius:8px;border:1px solid var(--line)">
         <b style="color:var(--muted);display:block;font-size:11px;text-transform:uppercase;margin-bottom:4px">Problem Description:</b>
         ${esc(ticket.description)}
+        ${Array.isArray(ticket.attachments) && ticket.attachments.length ? `
+          <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
+            <b style="color:var(--muted);display:block;font-size:11px;text-transform:uppercase;margin-bottom:6px">Attached Photos (${ticket.attachments.length}):</b>
+            <div class="tck-photo-grid" style="margin-top:0;">
+              ${ticket.attachments.map((att, i) => `
+                <div class="tck-photo-thumb" data-view-photo="${i}" title="Click to view full photo">
+                  <img src="${att.dataUrl}" alt="${esc(att.name || 'Issue photo')}">
+                </div>`).join('')}
+            </div>
+          </div>` : ''}
       </div>
 
       ${ticket.resolutionNotes ? `
@@ -3530,7 +3591,14 @@ function processTicketModal(ticket) {
     });
   }
 
-  modal(`Ticket Details: #${ticket.id}`, body, buttons, 'md');
+  const tckModal = modal(`Ticket Details: #${ticket.id}`, body, buttons, 'md');
+  tckModal.querySelectorAll('[data-view-photo]').forEach(el => {
+    el.onclick = () => {
+      const att = (ticket.attachments || [])[+el.dataset.viewPhoto];
+      if (!att) return;
+      modal(`📷 ${att.name || 'Issue Photo'}`, `<div style="text-align:center;"><img src="${att.dataUrl}" style="max-width:100%;max-height:70vh;border-radius:10px;border:1px solid var(--line);"></div>`, [], 'md');
+    };
+  });
 
   setTimeout(() => {
     const btnWaDelegate = $('#btn-wa-it-delegate');
